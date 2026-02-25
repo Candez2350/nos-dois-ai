@@ -13,6 +13,12 @@ const getSupabase = () => {
   return createClient(url, key);
 };
 
+export async function GET() {
+  return new Response("🚀 O motor do NósDois.ai está roncando e pronto para receber gastos!", {
+    status: 200,
+  });
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = getSupabase();
