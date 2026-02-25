@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-base-js';
+import { createClient } from '@supabase/supabase-js'; // O correto é supabase-js
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Configuração do Supabase e Gemini
