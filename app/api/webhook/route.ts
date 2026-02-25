@@ -3,12 +3,23 @@ import { createClient } from '@supabase/supabase-js'; // O correto é supabase-j
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Configuração do Supabase e Gemini
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const getSupabase = () => {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    throw new Error('Supabase URL ou Key não encontradas nas variáveis de ambiente.');
+  }
+  return createClient(url, key);
+};
 
 export async function POST(req: Request) {
   try {
+    const supabase = getSupabase();
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
     const payload = await req.json();
+
 
     // 1. Filtro Inicial: Só queremos mensagens novas
     if (payload.event !== 'messages.upsert') {
