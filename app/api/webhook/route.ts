@@ -4,7 +4,7 @@ import { analyzeReceipt } from '@/lib/gemini-service';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { sendWhatsAppMessage } from '@/lib/evolution-api';
 
-// Configuração para Next.js aceitar payloads maiores (ajuda com imagens)
+// Configuração para Next.js aceitar payloads maiores
 export const config = {
   api: {
     bodyParser: {
@@ -17,7 +17,6 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin();
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-  // 1. PERSONALIDADE E REGRAS DO DUETTO
   const systemInstruction = `
     Você é o Duetto, um assistente financeiro inteligente para casais.
     Ao receber um gasto em texto, sua tarefa é extrair: valor (number), local (string) e categoria (string).
@@ -29,36 +28,40 @@ export async function POST(req: NextRequest) {
   `;
 
   try {
-    // 2. LER O CORPO DA REQUISIÇÃO (Apenas uma vez para evitar erro de stream)
     const body = await req.json();
 
-    // 3. FILTRO DE EVENTOS (Ignora histórico e notificações de leitura)
     if (body.event !== 'messages.upsert') {
       return NextResponse.json({ message: 'Evento ignorado' }, { status: 200 });
     }
 
     const { data } = body;
 
-    // Ignora se for mensagem enviada pelo próprio bot
-    if (data.key?.fromMe) {
-      return NextResponse.json({ message: 'Ignorado (fromMe)' }, { status: 200 });
-    }
-
-    // Identificação do Chat e do Pagador
-    const remoteJid = data.key.remoteJid; // ID do Grupo ou do Chat Privado
-    const participantJid = data.key.participant || remoteJid; // Quem enviou a mensagem
-    const payerNumber = participantJid.split('@')[0];
-
-    // Log limpo para monitoramento na Vercel
-    console.log(`📩 Mensagem de ${payerNumber} em ${remoteJid}`);
-
-    // Extração de Conteúdo (Texto, Legenda de Imagem ou Resposta)
+    // 1. EXTRAÇÃO PRÉVIA DO CONTEÚDO PARA VALIDAÇÃO
     const messageContent = (
       data.message?.conversation || 
       data.message?.extendedTextMessage?.text || 
       data.message?.imageMessage?.caption || 
       ""
     ).trim();
+
+    const isFromMe = data.key?.fromMe;
+
+    // 2. AJUSTE PARA MODO TESTADOR (ROGER)
+    // Se a mensagem for do bot (fromMe), só continuamos se for um comando ou gasto manual.
+    // Isso evita que o bot processe as próprias mensagens de confirmação.
+    if (isFromMe) {
+      const isTestCommand = messageContent.startsWith('/') || messageContent.toLowerCase().includes('gastei');
+      if (!isTestCommand) {
+        return NextResponse.json({ message: 'Ignorado (Auto-resposta do bot)' }, { status: 200 });
+      }
+      console.log('🧪 Modo Testador: Processando mensagem do próprio número.');
+    }
+
+    const remoteJid = data.key.remoteJid; 
+    const participantJid = data.key.participant || remoteJid;
+    const payerNumber = participantJid.split('@')[0];
+
+    console.log(`📩 Mensagem de ${payerNumber} em ${remoteJid}`);
 
     const isImage = !!data.message?.imageMessage || data.messageType === 'imageMessage';
 
@@ -79,7 +82,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: 'Token inválido' });
       }
 
-      // Vincula o JID do WhatsApp ao registro do casal
       const { error: updateError } = await supabase
         .from('couples')
         .update({ wa_group_id: remoteJid })
@@ -96,7 +98,6 @@ export async function POST(req: NextRequest) {
     }
 
     // --- FLUXO 2: PROCESSAMENTO DE GASTOS ---
-    // Busca o casal pelo JID do grupo
     const { data: currentCouple, error: coupleError } = await supabase
       .from('couples')
       .select('id, name')
@@ -104,14 +105,13 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (coupleError || !currentCouple) {
-      console.log('⚠️ Mensagem de grupo não autorizado:', remoteJid);
+      console.log('⚠️ Grupo não autorizado:', remoteJid);
       return NextResponse.json({ message: 'Não autorizado' }, { status: 200 });
     }
 
     let finalData = { valor: 0, local: '', categoria: '' };
 
     if (isImage) {
-      // Processamento de Imagem (OCR via Gemini 1.5/2.0 em gemini-service)
       const base64Data = data.message?.imageMessage?.base64 || data.base64;
       const receipt = await analyzeReceipt(base64Data);
       finalData = { 
@@ -120,7 +120,6 @@ export async function POST(req: NextRequest) {
         categoria: receipt.categoria 
       };
     } else if (messageContent) {
-      // Processamento de Texto (Gemini 2.0 Flash com System Instruction)
       const model = genAI.getGenerativeModel({ 
         model: "gemini-2.0-flash",
         systemInstruction: systemInstruction 
@@ -139,7 +138,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Mensagem vazia' });
     }
 
-    // Salva a transação no banco
     const { error: txError } = await supabase.from('transactions').insert({
       couple_id: currentCouple.id,
       payer_wa_number: payerNumber,
@@ -151,7 +149,6 @@ export async function POST(req: NextRequest) {
 
     if (txError) throw txError;
 
-    // Resposta de confirmação no WhatsApp
     const msgConfirmacao = `✅ *Anotado, capitão!*\n\n💰 *R$ ${finalData.valor.toFixed(2)}*\n📍 *Local:* ${finalData.local}\n📁 *Categoria:* ${finalData.categoria}\n👤 *Pago por:* @${payerNumber}`;
     
     await sendWhatsAppMessage(msgConfirmacao, remoteJid);
@@ -160,7 +157,6 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('🔥 Erro Crítico no Webhook:', error.message);
-    // Retornamos 200 para a Evolution não ficar tentando reenviar o erro infinitamente
     return NextResponse.json({ error: 'Erro processado' }, { status: 200 });
   }
 }
