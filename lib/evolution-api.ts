@@ -4,11 +4,12 @@ export async function sendWhatsAppMessage(text: string, remoteJid: string) {
   const instance = process.env.EVOLUTION_INSTANCE_NAME;
 
   if (!apiKey || !apiUrl || !instance) {
-    console.error('❌ [Evolution] Configurações ausentes no ambiente');
+    console.error('❌ Configurações ausentes');
     return null;
   }
 
   try {
+    // Para v1.8.2 no Koyeb, o endpoint de texto deve ser bem direto
     const response = await fetch(`${apiUrl}/message/sendText/${instance}`, {
       method: 'POST',
       headers: {
@@ -18,27 +19,21 @@ export async function sendWhatsAppMessage(text: string, remoteJid: string) {
       body: JSON.stringify({
         number: remoteJid,
         textMessage: {
-          text: text // O texto PRECISA estar aqui dentro na v1.8.2
-        },
-        options: {
-          delay: 0,
-          presence: 'composing',
-          linkPreview: false
+          text: text
         }
       })
     });
 
-    const result = await response.json();
-
     if (!response.ok) {
-      console.error('❌ [Evolution] Erro detalhado:', JSON.stringify(result));
-      throw new Error(`Status ${response.status}`);
+      const errorData = await response.json();
+      console.error('❌ Erro na Evolution:', errorData);
+      return null;
     }
 
-    console.log(`✅ [Evolution] Mensagem enviada para ${remoteJid}`);
-    return result;
+    console.log(`✅ Mensagem enviada para ${remoteJid}`);
+    return await response.json();
   } catch (error: any) {
-    console.error('❌ [Evolution] Erro ao enviar:', error.message);
+    console.error('❌ Falha no fetch da Evolution:', error.message);
     return null;
   }
 }
