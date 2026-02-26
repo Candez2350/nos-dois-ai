@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     const { data } = body;
     
-    // Extração do conteúdo
+    // Extração do conteúdo (Trata texto simples, mensagens estendidas e legendas de imagem)
     const messageContent = (
       data.message?.conversation || 
       data.message?.extendedTextMessage?.text || 
@@ -46,14 +46,13 @@ export async function POST(req: NextRequest) {
     if (isFromMe) {
       const isAction = messageContent.startsWith('/') || messageContent.toLowerCase().includes('gastei');
       if (!isAction) return NextResponse.json({ message: 'Auto-resposta ignorada' }, { status: 200 });
-      console.log('🧪 Processando ação do próprio número');
+      console.log('🧪 Processando ação do próprio número (Roger)');
     }
 
-    // --- FLUXO 1: ATIVAÇÃO (/ativar) ---
+    // --- FLUXO 1: ATIVAÇÃO (/ativar TOKEN) ---
     if (messageContent.toLowerCase().startsWith('/ativar')) {
       const token = messageContent.split(' ')[1]?.trim();
-      console.log(`🔑 Tentando ativar token: [${token}] no JID: ${remoteJid}`);
-
+      
       const { data: couple, error: fetchError } = await supabase
         .from('couples')
         .select('*')
@@ -61,20 +60,17 @@ export async function POST(req: NextRequest) {
         .single();
 
       if (fetchError || !couple) {
-        console.error('❌ Token inválido ou erro na busca');
+        await sendWhatsAppMessage("❌ Token inválido. Verifique o código e tente novamente.", remoteJid);
         return NextResponse.json({ message: 'Token inválido' }, { status: 200 });
       }
 
-      // VINCULAÇÃO: Atualiza o wa_group_id (permite sobrescrever para troca de grupo)
+      // VINCULAÇÃO: Salva o ID do grupo no banco
       const { error: updateError } = await supabase
         .from('couples')
         .update({ wa_group_id: remoteJid })
         .eq('id', couple.id);
 
-      if (updateError) {
-        console.error('❌ Erro ao vincular wa_group_id:', updateError.message);
-        return NextResponse.json({ message: 'Erro no vínculo' }, { status: 200 });
-      }
+      if (updateError) throw updateError;
 
       await sendWhatsAppMessage(
         `✅ *NósDois.ai Ativado!*\n\nOlá! Agora estou de olho nas contas de vocês! 🤖🚀`,
@@ -92,14 +88,14 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (coupleError || !currentCouple) {
-      console.log('⚠️ Grupo ou conversa não autorizada:', remoteJid);
+      console.log('⚠️ Grupo não autorizado:', remoteJid);
       return NextResponse.json({ message: 'Não autorizado' }, { status: 200 });
     }
 
     const isImage = !!data.message?.imageMessage;
     let expense;
 
-    // Chama o motor Gemini 2.5 Flash
+    // Chama o Gemini para entender o gasto
     if (isImage) {
       const base64 = data.message?.imageMessage?.base64 || data.base64;
       expense = await analyzeExpense({ imageBase64: base64 });
@@ -107,7 +103,7 @@ export async function POST(req: NextRequest) {
       expense = await analyzeExpense({ text: messageContent });
     }
 
-    // Salva no Supabase
+    // Salva a transação no Supabase
     const { error: txError } = await supabase.from('transactions').insert({
       couple_id: currentCouple.id,
       payer_wa_number: payerNumber,
@@ -119,7 +115,7 @@ export async function POST(req: NextRequest) {
 
     if (txError) throw txError;
 
-    // Resposta de confirmação formatada
+    // Resposta formatada para o casal
     const msgConfirmacao = `✅ *Anotado!*\n\n💰 *R$ ${expense.valor.toFixed(2)}*\n📍 *Local:* ${expense.local}\n📁 *Categoria:* ${expense.categoria}\n👤 *Por:* @${payerNumber}`;
     
     await sendWhatsAppMessage(msgConfirmacao, remoteJid);
@@ -128,6 +124,6 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('🔥 Erro Crítico no Webhook:', error.message);
-    return NextResponse.json({ error: 'Erro processado' }, { status: 200 });
+    return NextResponse.json({ error: 'Erro processado internamente' }, { status: 200 });
   }
 }
