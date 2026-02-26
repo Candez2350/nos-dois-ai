@@ -26,12 +26,11 @@ export async function analyzeExpense(input: { text?: string; imageBase64?: strin
     
     // Configuração para o modelo 2.5 Flash com saída JSON obrigatória
     const model = client.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: "gemini-1.5-flash", // Forçando o modelo estável
       generationConfig: {
         responseMimeType: "application/json",
       }
     });
-
     const systemInstruction = `
       Você é um assistente de organização financeira. 
       Sua única função é extrair dados de despesas a partir de mensagens de texto ou imagens de recibos.
