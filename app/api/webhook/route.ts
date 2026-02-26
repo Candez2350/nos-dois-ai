@@ -2,27 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { analyzeReceipt } from '@/lib/gemini-service';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-// ... imports anteriores
 import { sendWhatsAppMessage } from '@/lib/evolution-api';
 
 export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin();
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-  
-  
   try {
-    const rawBody = await req.json();
+    // 1. LER O CORPO APENAS UMA VEZ
+    const body = await req.json();
     
-    // LOG INTELIGENTE: Remove o Base64 do log para não poluir
-    const bodyLog = { ...rawBody };
+    // 2. LOG INTELIGENTE (Usando a variável 'body' que já foi lida)
+    const bodyLog = { ...body };
     if (bodyLog.data?.base64) bodyLog.data.base64 = "[MUITO GRANDE]";
     if (bodyLog.data?.message?.imageMessage?.base64) bodyLog.data.message.imageMessage.base64 = "[MUITO GRANDE]";
     
     console.log('📦 [WEBHOOK] Payload recebido (limpo):', JSON.stringify(bodyLog));
-    const body = await req.json();
+
+    // 3. DESESTRUTURAR OS DADOS
     const { event, data } = body;
 
+    // Filtro inicial
     if (event !== 'messages.upsert' || data.key?.fromMe) {
       return NextResponse.json({ message: 'Ignorado' }, { status: 200 });
     }
@@ -30,25 +30,44 @@ export async function POST(req: NextRequest) {
     const remoteJid = data.key.remoteJid; 
     const participantJid = data.key.participant || remoteJid;
     const payerNumber = participantJid.split('@')[0];
-    const messageContent = data.message?.conversation || data.message?.extendedTextMessage?.text || "";
+
+    // Extração de texto aprimorada (captura texto simples, resposta com link e legenda de foto)
+    const messageContent = (
+      data.message?.conversation || 
+      data.message?.extendedTextMessage?.text || 
+      data.message?.imageMessage?.caption || 
+      ""
+    ).trim();
+
     const isImage = !!data.message?.imageMessage || data.messageType === 'imageMessage';
 
     // --- FLUXO 1: HANDSHAKE (/ativar) ---
     if (messageContent.startsWith('/ativar')) {
-      const token = messageContent.split(' ')[1];
+      const token = messageContent.split(' ')[1]?.trim();
       
-      const { data: couple, error } = await supabase
+      console.log(`🔑 Tentando ativar grupo ${remoteJid} com token ${token}`);
+
+      const { data: couple, error: fetchError } = await supabase
         .from('couples')
-        .update({ wa_group_id: remoteJid })
+        .select('*')
         .eq('activation_token', token)
-        .select()
         .single();
 
-      if (error || !couple) return NextResponse.json({ message: 'Token inválido' });
+      if (fetchError || !couple) {
+        console.error('❌ Token inválido:', token);
+        return NextResponse.json({ message: 'Token inválido' });
+      }
+
+      const { error: updateError } = await supabase
+        .from('couples')
+        .update({ wa_group_id: remoteJid })
+        .eq('id', couple.id);
+
+      if (updateError) throw updateError;
 
       // 📢 RESPOSTA DE SUCESSO NO WHATSAPP
       await sendWhatsAppMessage(
-        `✅ *Ativação Concluída!*\n\nOlá! Eu sou o Duetto, a assistente financeira de vocês. 🤖\n\nA partir de agora, qualquer gasto enviado aqui (foto ou texto) será anotado automaticamente. Vamos colocar essas finanças em ordem! 🚀`,
+        `✅ *Ativação Concluída!*\n\nOlá! Eu sou o Duetto, o assistente financeiro de vocês. 🤖\n\nA partir de agora, qualquer gasto enviado aqui (foto ou texto) será anotado automaticamente. Vamos colocar essas finanças em ordem! 🚀`,
         remoteJid
       );
 
@@ -62,11 +81,15 @@ export async function POST(req: NextRequest) {
       .eq('wa_group_id', remoteJid)
       .single();
 
-    if (!currentCouple) return NextResponse.json({ message: 'Não autorizado' });
+    if (!currentCouple) {
+      console.log('⚠️ Grupo não autorizado:', remoteJid);
+      return NextResponse.json({ message: 'Não autorizado' });
+    }
 
     let finalData = { valor: 0, local: '', categoria: '' };
 
     if (isImage) {
+      // Prioriza Base64 se a Evolution enviar, senão o analyzeReceipt trata
       const base64Data = data.base64 || data.message?.imageMessage?.base64;
       const receipt = await analyzeReceipt(base64Data);
       finalData = { valor: receipt.valor_total, local: receipt.estabelecimento, categoria: receipt.categoria };
@@ -98,6 +121,7 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('❌ Erro no Webhook:', error.message);
-    return NextResponse.json({ error: 'Erro processado' }, { status: 200 });
+    // Retornamos 200 para não travar a Evolution API, mas logamos o erro
+    return NextResponse.json({ error: 'Erro processado', detalhe: error.message }, { status: 200 });
   }
 }
