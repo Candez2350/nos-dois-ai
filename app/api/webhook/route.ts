@@ -45,9 +45,22 @@ export async function POST(req: NextRequest) {
     // 2. MODO TESTADOR (ROGER)
     const isFromMe = data.key?.fromMe;
     if (isFromMe) {
-      const isAction = messageContent.startsWith('/') || messageContent.toLowerCase().includes('gastei') || isImage;
-      if (!isAction) return NextResponse.json({ message: 'Auto-resposta ignorada' }, { status: 200 });
-      console.log('🧪 Processando ação do próprio número (Roger)');
+      const hasNumber = /\d+/.test(messageContent);
+      
+      // Lista de termos que geralmente indicam tempo ou contexto não financeiro
+      const stopWords = ['minuto', 'min', 'hora', ' h ', 'segundo', 'dia', 'ano', 'feira'];
+      const isFalsePositive = stopWords.some(word => 
+        messageContent.toLowerCase().includes(word)
+      );
+
+      // Abre a porta se: for comando, tiver número (e não for tempo) ou for imagem
+      const isAction = (messageContent.startsWith('/') || (hasNumber && !isFalsePositive)) || isImage; 
+                       
+      if (!isAction) {
+        return NextResponse.json({ message: 'Conversa comum ou tempo ignorado' }, { status: 200 });
+      }
+      
+      console.log('🧪 Analisando possível gasto real do Roger...');
     }
 
     // --- FLUXO 1: ATIVAÇÃO (/ativar TOKEN) ---

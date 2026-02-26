@@ -115,7 +115,7 @@ export default function Home() {
               },
               {
                 quote: "Que preguiça de abrir a planilha de gastos.",
-                desc: "A fricção e burocracia de ter que anotar cada centavo em um app complexo ou planilha de Excel."
+                desc: "O trabalho de ter que anotar cada centavo em um app complexo ou planilha de Excel."
               }
             ].map((pain, i) => (
               <motion.div 
@@ -142,7 +142,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-20">
             <h2 className="text-3xl md:text-4xl font-bold font-display mb-4">
-              Zero fricção. 100% automático.
+              Direto ao ponto. 100% automático.
             </h2>
             <p className="text-gray-400">Veja como é simples organizar as finanças em 3 passos.</p>
           </div>
