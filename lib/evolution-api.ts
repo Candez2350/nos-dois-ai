@@ -1,46 +1,36 @@
 export async function sendWhatsAppMessage(text: string, remoteJid: string) {
-  // 1. Limpeza das URLs (Evita erro de // na rota)
   const apiKey = process.env.EVOLUTION_API_KEY;
-  const apiUrl = process.env.EVOLUTION_API_URL?.replace(/\/$/, ""); // Remove barra no final se houver
+  const apiUrl = process.env.EVOLUTION_API_URL?.replace(/\/$/, ""); 
   const instance = process.env.EVOLUTION_INSTANCE_NAME;
 
-  // 2. Log detalhado para sabermos exatamente o que está faltando
   if (!apiKey || !apiUrl || !instance) {
-    console.error('❌ [Evolution] Configurações ausentes:', {
-      hasKey: !!apiKey,
-      hasUrl: !!apiUrl,
-      hasInstance: !!instance
-    });
+    console.error('❌ [Evolution] Configurações ausentes');
     return null;
   }
 
   try {
-    const url = `${apiUrl}/message/sendText/${instance}`;
-    
-    const response = await fetch(url, {
+    const response = await fetch(`${apiUrl}/message/sendText/${instance}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': apiKey
       },
       body: JSON.stringify({
-        number: remoteJid,
-        options: {
-          delay: 500, // Diminuí um pouco para ser mais rápido
-          presence: 'composing'
-        },
+        number: remoteJid, // O JID do grupo (120363425019427166@g.us)
+        text: text,        // Algumas versões da 1.8 preferem 'text' direto ou dentro de 'textMessage'
         textMessage: {
           text: text
         }
       })
     });
 
+    const result = await response.json();
+
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Status ${response.status}: ${errorText}`);
+      console.error('❌ [Evolution] Erro na resposta:', result);
+      throw new Error(result.message || 'Erro desconhecido');
     }
 
-    const result = await response.json();
     console.log(`✅ [Evolution] Mensagem enviada para ${remoteJid}`);
     return result;
   } catch (error: any) {
