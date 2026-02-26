@@ -61,14 +61,17 @@ export async function analyzeExpense(input: { text?: string; imageBase64?: strin
         ? input.imageBase64.split(',')[1] 
         : input.imageBase64;
 
+      // LOG DE SEGURANÇA: Verifica se o Base64 começa corretamente
+      console.log("📸 [DEBUG] Início do Base64:", cleanBase64.substring(0, 30) + "...");
+
       result = await model.generateContent([
-        { text: systemInstruction },
         { 
           inlineData: { 
             mimeType: 'image/jpeg', 
             data: cleanBase64
           } 
-        }
+        },
+        { text: "Analise esta imagem e extraia os dados financeiros conforme as instruções: " + systemInstruction }
       ]);
     } else {
       result = await model.generateContent(`${systemInstruction}\n\nTexto: "${input.text}"`);
