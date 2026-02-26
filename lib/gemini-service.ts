@@ -20,69 +20,79 @@ export interface ExpenseData {
 export async function analyzeExpense(input: { text?: string; imageBase64?: string }): Promise<ExpenseData> {
   try {
     const client = getGenAIClient();
-    
-    // Alterado para 2.5-flash que está com cota disponível no seu painel
+
     const model = client.getGenerativeModel({
-      model: "gemini-2.5-flash", 
+      model: "gemini-2.5-flash",
       generationConfig: {
         responseMimeType: "application/json",
       }
     });
 
     const systemInstruction = `
-      Você é o Duetto, um assistente de organização financeira para casais. 
+      Você é o Duetto, um assistente de organização financeira para casais brasileiros.
       Sua função é extrair dados de despesas a partir de mensagens de texto ou imagens de recibos/notas fiscais.
 
       --- REGRAS PARA IMAGENS (OCR) ---
-      1. Identifique o valor REAL pago. Em notas fiscais brasileiras, foque em "Valor a Pagar", "Total Pago" ou "Valor Recebido". 
-      2. Ignore subtotais ou valores de descontos. No exemplo da Miudezas, o valor correto é o final (R$ 20,48).
-      3. Identifique o nome do estabelecimento no topo da nota para o campo "local".
+      1. Leia TODA a imagem com atenção antes de responder.
+      2. O valor correto a extrair é o VALOR FINAL PAGO. Procure por: "Valor a Pagar", "Total Pago", "Valor Recebido", "Total", "TOTAL A PAGAR".
+      3. IGNORE subtotais, valores parciais e descontos intermediários.
+      4. O nome do estabelecimento geralmente aparece no TOPO da nota fiscal — use-o no campo "local".
+      5. Se houver CNPJ ou endereço, ignore — foque apenas no nome do estabelecimento e no valor final.
 
       --- REGRAS PARA TEXTO ---
-      1. Identifique gastos em mensagens como "Gastei 50 no mercado".
+      1. Identifique gastos em mensagens como "Gastei 50 no mercado" ou "Paguei R$ 30,00 no posto".
       2. Converta valores por extenso para numerais (ex: "vinte reais" vira 20).
 
-      --- PADRONIZAÇÃO ---
-      - Se o valor não for identificado, retorne 0.
-      - Se o local não for identificado, use "Gasto Geral".
-      - Categorias: "Alimentação", "Lazer", "Transporte", "Casa", "Saúde", "Outros".
+      --- CATEGORIAS DISPONÍVEIS ---
+      "Alimentação", "Lazer", "Transporte", "Casa", "Saúde", "Outros"
 
-      SAÍDA (JSON PURO):
+      --- FORMATO DE SAÍDA ---
+      Retorne APENAS o JSON puro, sem markdown, sem explicações:
       {
         "valor": number,
         "local": string,
         "categoria": string
       }
+
+      Se o valor não for identificado, retorne 0.
+      Se o local não for identificado, use "Gasto Geral".
     `;
 
     let result;
+
     if (input.imageBase64) {
-      const cleanBase64 = input.imageBase64.includes(',') 
-        ? input.imageBase64.split(',')[1] 
+      const cleanBase64 = input.imageBase64.includes(',')
+        ? input.imageBase64.split(',')[1]
         : input.imageBase64;
 
-      // LOG DE SEGURANÇA: Verifica se o Base64 começa corretamente
       console.log("📸 [DEBUG] Início do Base64:", cleanBase64.substring(0, 30) + "...");
 
       result = await model.generateContent([
-        { 
-          inlineData: { 
-            mimeType: 'image/jpeg', 
+        { text: systemInstruction },
+        {
+          inlineData: {
+            mimeType: 'image/jpeg',
             data: cleanBase64
-          } 
+          }
         },
-        { text: "Analise esta imagem e extraia os dados financeiros conforme as instruções: " + systemInstruction }
+        { text: "Extraia os dados financeiros desta nota fiscal e retorne APENAS o JSON." }
       ]);
+
     } else {
-      result = await model.generateContent(`${systemInstruction}\n\nTexto: "${input.text}"`);
+      result = await model.generateContent([
+        { text: systemInstruction },
+        { text: `Texto do usuário: "${input.text}"` }
+      ]);
     }
 
     const responseText = result.response.text();
-    console.log("🤖 [DEBUG] Resposta da IA:", responseText); // Log vital para depuração
-    
-    const parsed = JSON.parse(responseText);
+    console.log("🤖 [DEBUG] Resposta da IA:", responseText);
 
-    // Tratamento robusto para converter R$ 20,48 ou "20.48" em número real
+    // Remove possíveis markdown fences caso o modelo retorne ```json ... ```
+    const cleanResponse = responseText.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleanResponse);
+
+    // Conversão robusta para número (trata "R$ 20,48", "20.48", 20)
     let valorNumerico = 0;
     if (typeof parsed.valor === 'string') {
       valorNumerico = parseFloat(
