@@ -1,39 +1,45 @@
 export async function sendWhatsAppMessage(text: string, remoteJid: string) {
   try {
     const instance = process.env.EVOLUTION_INSTANCE_NAME;
-    const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${instance}`;
+    const apiKey = process.env.EVOLUTION_API_KEY;
+    const baseURL = process.env.EVOLUTION_API_URL;
 
-    // Limpeza: Garante que o JID não tenha espaços extras
-    const targetJid = remoteJid.trim();
+    if (!instance || !apiKey || !baseURL) {
+      throw new Error("Variáveis da Evolution API não configuradas na Vercel.");
+    }
+
+    // A rota correta para envio de texto na v1.8.2
+    const url = `${baseURL}/message/sendText/${instance}`;
 
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': process.env.EVOLUTION_API_KEY || '',
+        'apikey': apiKey,
       },
       body: JSON.stringify({
-        number: targetJid,
+        number: remoteJid, // Mantemos o JID completo (ex: 12036... @g.us)
         textMessage: {
           text: text
+        },
+        options: {
+          delay: 1200,
+          presence: "composing",
+          linkPreview: false
         }
       }),
     });
 
-    const contentType = response.headers.get("content-type");
-    if (contentType && contentType.includes("application/json")) {
-      const data = await response.json();
-      if (!response.ok) {
-        console.error('❌ Erro Evolution API:', data);
-        throw new Error(`Erro Evolution: ${data.response?.message || 'Erro 400'}`);
-      }
-      return data;
-    } else {
-      const errorText = await response.text();
-      throw new Error(`Erro de rede: ${errorText.substring(0, 50)}`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('❌ Resposta negativa da Evolution:', data);
+      throw new Error(`Erro Evolution: ${data.response?.message || 'Falha no envio'}`);
     }
+
+    return data;
   } catch (error: any) {
-    console.error('🔥 Falha ao enviar mensagem:', error.message);
+    console.error('🔥 Erro na função sendWhatsAppMessage:', error.message);
     throw error;
   }
 }
