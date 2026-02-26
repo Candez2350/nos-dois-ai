@@ -1,26 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
-import { analyzeReceipt } from '@/lib/gemini-service';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { analyzeExpense } from '@/lib/gemini-service';
 import { sendWhatsAppMessage } from '@/lib/evolution-api';
 
+// Configuração para suportar o recebimento de imagens (OCR)
 export const config = {
-  api: { bodyParser: { sizeLimit: '10mb' } },
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
 };
 
 export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin();
-  // Inicializa o Gemini
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
   try {
     const body = await req.json();
 
+    // 1. FILTRO DE EVENTOS: Ignora históricos e foca no que é novo
     if (body.event !== 'messages.upsert') {
-      return NextResponse.json({ message: 'Ignorado' }, { status: 200 });
+      return NextResponse.json({ message: 'Evento ignorado' }, { status: 200 });
     }
 
     const { data } = body;
+    
+    // Extração do conteúdo (Texto, Legenda ou Conversa)
     const messageContent = (
       data.message?.conversation || 
       data.message?.extendedTextMessage?.text || 
@@ -28,69 +33,88 @@ export async function POST(req: NextRequest) {
       ""
     ).trim();
 
-    // 🧪 MODO TESTADOR: Permite que você (o bot) envie comandos para si mesmo
+    // 2. MODO TESTADOR (ROGER): 
+    // Permite que você use o número do bot para testar comandos e gastos.
     const isFromMe = data.key?.fromMe;
     if (isFromMe) {
       const isAction = messageContent.startsWith('/') || messageContent.toLowerCase().includes('gastei');
-      if (!isAction) return NextResponse.json({ message: 'Auto-resposta' }, { status: 200 });
+      if (!isAction) return NextResponse.json({ message: 'Auto-resposta ignorada' }, { status: 200 });
+      console.log('🧪 Processando ação do próprio número (Roger)');
     }
 
     const remoteJid = data.key.remoteJid; 
     const participantJid = data.key.participant || remoteJid;
     const payerNumber = participantJid.split('@')[0];
 
-    // --- FLUXO 1: ATIVAÇÃO ---
+    // --- FLUXO 1: ATIVAÇÃO (/ativar) ---
     if (messageContent.toLowerCase().startsWith('/ativar')) {
       const token = messageContent.split(' ')[1]?.trim();
-      const { data: couple } = await supabase.from('couples').select('*').eq('activation_token', token).single();
+      
+      const { data: couple, error: fetchError } = await supabase
+        .from('couples')
+        .select('*')
+        .eq('activation_token', token)
+        .single();
 
-      if (!couple) return NextResponse.json({ message: 'Token inválido' });
+      if (fetchError || !couple) {
+        return NextResponse.json({ message: 'Token inválido' }, { status: 200 });
+      }
 
+      // Vincula o JID do grupo ao casal
       await supabase.from('couples').update({ wa_group_id: remoteJid }).eq('id', couple.id);
-      await sendWhatsAppMessage(`✅ *Ativação Confirmada!* O Duetto está pronto. 🚀`, remoteJid);
+
+      await sendWhatsAppMessage(
+        `✅ *NósDois.ai Ativado!*\n\nOlá! Eu sou o Duetto. Roger e Juliana, agora estou de olho nas contas de vocês! 🤖🚀`,
+        remoteJid
+      );
+
       return NextResponse.json({ message: 'Ativado' });
     }
 
-    // --- FLUXO 2: PROCESSAMENTO ---
-    const { data: currentCouple } = await supabase.from('couples').select('id').eq('wa_group_id', remoteJid).single();
-    if (!currentCouple) return NextResponse.json({ message: 'Não autorizado' }, { status: 200 });
+    // --- FLUXO 2: PROCESSAMENTO DE GASTOS ---
+    const { data: currentCouple, error: coupleError } = await supabase
+      .from('couples')
+      .select('id')
+      .eq('wa_group_id', remoteJid)
+      .single();
 
-    let finalData = { valor: 0, local: '', categoria: '' };
-    const isImage = !!data.message?.imageMessage;
-
-    if (isImage) {
-      const base64Data = data.message?.imageMessage?.base64 || data.base64;
-      const receipt = await analyzeReceipt(base64Data);
-      finalData = { valor: receipt.valor_total, local: receipt.estabelecimento, categoria: receipt.categoria };
-    } else {
-      // MUDANÇA PARA GEMINI-1.5-FLASH (Cota mais estável)
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const prompt = `Extraia JSON: {valor: number, local: string, categoria: string} deste gasto: "${messageContent}". 
-      Categorias: Alimentação, Lazer, Transporte, Casa, Saúde, Outros. Responda APENAS o JSON.`;
-      
-      const result = await model.generateContent(prompt);
-      const parsed = JSON.parse(result.response.text().replace(/```json|```/g, ""));
-      finalData = { valor: parsed.valor, local: parsed.local, categoria: parsed.categoria || 'Outros' };
+    if (coupleError || !currentCouple) {
+      console.log('⚠️ Grupo ou conversa não autorizada:', remoteJid);
+      return NextResponse.json({ message: 'Não autorizado' }, { status: 200 });
     }
 
-    await supabase.from('transactions').insert({
+    const isImage = !!data.message?.imageMessage;
+    let expense;
+
+    // Chama o motor unificado (gemini-service.ts)
+    if (isImage) {
+      const base64 = data.message?.imageMessage?.base64 || data.base64;
+      expense = await analyzeExpense({ imageBase64: base64 });
+    } else {
+      expense = await analyzeExpense({ text: messageContent });
+    }
+
+    // Salva no Supabase
+    const { error: txError } = await supabase.from('transactions').insert({
       couple_id: currentCouple.id,
       payer_wa_number: payerNumber,
-      amount: finalData.valor,
-      description: finalData.local,
-      category: finalData.categoria,
-      ai_metadata: { raw: finalData }
+      amount: expense.valor,
+      description: expense.local,
+      category: expense.categoria,
+      ai_metadata: { source: isImage ? 'ocr' : 'text', raw: expense }
     });
 
-    await sendWhatsAppMessage(
-      `✅ *Anotado!*\n💰 *R$ ${finalData.valor.toFixed(2)}* no *${finalData.local}*\n👤 Pago por @${payerNumber}`,
-      remoteJid
-    );
+    if (txError) throw txError;
+
+    // Resposta de confirmação
+    const msgConfirmacao = `✅ *Anotado!*\n\n💰 *R$ ${expense.valor.toFixed(2)}*\n📍 *Local:* ${expense.local}\n📁 *Categoria:* ${expense.categoria}\n👤 *Por:* @${payerNumber}`;
+    
+    await sendWhatsAppMessage(msgConfirmacao, remoteJid);
 
     return NextResponse.json({ success: true });
 
   } catch (error: any) {
-    console.error('🔥 Erro:', error.message);
+    console.error('🔥 Erro Crítico no Webhook:', error.message);
     return NextResponse.json({ error: 'Erro processado' }, { status: 200 });
   }
 }

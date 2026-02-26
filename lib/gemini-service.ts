@@ -5,74 +5,67 @@ let genAI: GoogleGenerativeAI | null = null;
 function getGenAIClient() {
   if (!genAI) {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not defined in environment variables.");
-    }
+    if (!apiKey) throw new Error("GEMINI_API_KEY ausente.");
     genAI = new GoogleGenerativeAI(apiKey);
   }
   return genAI;
 }
 
-export interface ReceiptData {
-  valor_total: number;
-  estabelecimento: string;
+export interface ExpenseData {
+  valor: number;
+  local: string;
   categoria: string;
 }
 
-export async function analyzeReceipt(imageInput: Buffer | string): Promise<ReceiptData> {
+/**
+ * Motor Único do Duetto: Processa Texto ou Imagem
+ */
+export async function analyzeExpense(input: { text?: string; imageBase64?: string }): Promise<ExpenseData> {
   try {
     const client = getGenAIClient();
+    // Forçamos a versão 'v1' para evitar o erro 404 da v1beta
+    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
 
-    let imageBase64: string;
-    if (typeof imageInput !== 'string') {
-      imageBase64 = imageInput.toString('base64');
+    const prompt = `
+      Você é o Duetto, assistente financeiro de um casal. 
+      Extraia os dados de gasto no formato JSON: {"valor": number, "local": string, "categoria": string}.
+      CATEGORIAS: Alimentação, Lazer, Transporte, Casa, Saúde, Outros.
+      Regra: Se o local não estiver claro, use "Gasto Geral". Se o valor for texto (ex: cem reais), converta para número (100).
+      RESPONDA APENAS O JSON PURO.
+    `;
+
+    let result;
+
+    if (input.imageBase64) {
+      // Processamento de Imagem (OCR)
+      result = await model.generateContent([
+        { inlineData: { mimeType: 'image/jpeg', data: input.imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
+        { text: prompt + " Analise esta imagem de recibo." }
+      ]);
     } else {
-      imageBase64 = imageInput.replace(/^data:image\/\w+;base64,/, '');
+      // Processamento de Texto Direto
+      result = await model.generateContent(`${prompt} Texto do gasto: "${input.text}"`);
     }
 
-    const modelInstance = client.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = 'Extraia os seguintes dados deste cupom fiscal brasileiro: valor_total (number), estabelecimento (string), categoria (string). Retorne estritamente um JSON puro.';
+    const responseText = result.response.text().replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(responseText);
 
-    const result = await modelInstance.generateContent([
-      {
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: imageBase64,
-        },
-      },
-      { text: prompt },
-    ]);
-
-    const response = await result.response;
-    const responseText = response.text();
-
-    if (!responseText) {
-      throw new Error("A IA retornou uma resposta vazia.");
-    }
-
-    const cleanJson = responseText.replace(/```json|```/g, "").trim();
-    
-    // Usamos 'any' aqui para evitar o erro de 'never' no TypeScript
-    const rawData = JSON.parse(cleanJson) as any;
-    
-    // Tratamos a conversão de valor de forma segura
+    // Tratamento de segurança para valores (Lida com R$, vírgulas e pontos)
     let valorFinal = 0;
-    if (typeof rawData.valor_total === 'string') {
-      valorFinal = parseFloat(rawData.valor_total.replace(',', '.'));
-    } else if (typeof rawData.valor_total === 'number') {
-      valorFinal = rawData.valor_total;
+    if (typeof parsed.valor === 'string') {
+      valorFinal = parseFloat(parsed.valor.replace(/[R$\s]/g, '').replace(',', '.'));
+    } else {
+      valorFinal = parsed.valor || 0;
     }
 
-    const data: ReceiptData = {
-      valor_total: isNaN(valorFinal) ? 0 : valorFinal,
-      estabelecimento: rawData.estabelecimento || "Desconhecido",
-      categoria: rawData.categoria || "Outros"
+    return {
+      valor: isNaN(valorFinal) ? 0 : valorFinal,
+      local: parsed.local || "Desconhecido",
+      categoria: parsed.categoria || "Outros"
     };
 
-    return data;
-
-  } catch (error) {
-    console.error("Erro em analyzeReceipt:", error);
+  } catch (error: any) {
+    console.error("🔥 Erro no Gemini Service:", error.message);
     throw error;
   }
 }
