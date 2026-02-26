@@ -10,11 +10,10 @@ export async function sendWhatsAppMessage(text: string, remoteJid: string) {
         'apikey': process.env.EVOLUTION_API_KEY || '',
       },
       body: JSON.stringify({
-        number: remoteJid, // A Evolution espera o JID completo aqui
-        text: text,
-        options: {
-          delay: 1200,
-          presence: "composing"
+        number: remoteJid,
+        // Mudança aqui: de "text" para o objeto "textMessage"
+        textMessage: {
+          text: text
         }
       }),
     });
@@ -23,7 +22,7 @@ export async function sendWhatsAppMessage(text: string, remoteJid: string) {
 
     if (!response.ok) {
       console.error('❌ Erro Evolution API:', data);
-      throw new Error(`Erro Evolution: ${data.response?.message || response.statusText}`);
+      throw new Error(`Erro Evolution: ${data.response?.message || 'Erro desconhecido'}`);
     }
 
     return data;
