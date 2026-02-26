@@ -1,28 +1,31 @@
-import type {Metadata} from 'next';
+import type { Metadata } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
-import './globals.css'; // Global styles
+import './globals.css';
 
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
-  display: 'swap',
 });
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
   variable: '--font-space-grotesk',
-  display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: 'Elo Financeiro',
+  title: 'NósDois.ai',
   description: 'Simplifique suas finanças compartilhadas',
 };
 
-export default function RootLayout({children}: {children: React.ReactNode}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" suppressHydrationWarning>
-      <body suppressHydrationWarning>{children}</body>
+      <body 
+        className={`${inter.variable} ${spaceGrotesk.variable} antialiased`}
+        suppressHydrationWarning
+      >
+        {children}
+      </body>
     </html>
   );
 }
