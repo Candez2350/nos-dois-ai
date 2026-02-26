@@ -13,8 +13,10 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
+import RegistrationModal from '@/components/RegistrationModal';
 
 export default function Home() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   // O 'mounted' garante que o Framer Motion só rode no navegador,
@@ -73,10 +75,18 @@ export default function Home() {
               Apenas envie a foto do cupom fiscal no grupo do WhatsApp. Nossa Inteligência Artificial organiza tudo e gera o acerto no fim do mês. Sem planilhas, sem apps novos.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button className="w-full sm:w-auto px-8 py-4 bg-[#25D366] text-white font-bold rounded-2xl hover:bg-[#20bd5a] transition-all flex items-center justify-center gap-3 shadow-xl shadow-[#25D366]/30 hover:scale-105 active:scale-95 text-lg">
-                <MessageCircle className="w-6 h-6" />
-                Começar agora pelo WhatsApp
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="bg-[#25D366] text-white px-8 py-4 rounded-2xl font-bold shadow-xl hover:scale-105 transition-all"
+              >
+                Testar Grátis Agora
               </button>
+
+              {/* O Modal fica aqui no final */}
+              <RegistrationModal 
+                isOpen={isModalOpen} 
+                onClose={() => setIsModalOpen(false)} 
+              />
             </div>
             <p className="mt-4 text-sm text-gray-500 font-medium">Teste grátis por 7 dias. Cancele quando quiser.</p>
           </motion.div>
@@ -277,10 +287,18 @@ export default function Home() {
               ))}
             </ul>
             
-            <button className="w-full md:w-auto px-12 py-5 bg-[#25D366] text-white font-bold rounded-2xl hover:bg-[#20bd5a] transition-all flex items-center justify-center gap-3 shadow-xl shadow-[#25D366]/30 hover:scale-105 active:scale-95 text-lg mx-auto">
-              <MessageCircle className="w-6 h-6" />
-              Assinar via WhatsApp
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="bg-[#25D366] text-white px-8 py-4 rounded-2xl font-bold shadow-xl hover:scale-105 transition-all"
+            >
+              Testar Grátis Agora
             </button>
+
+            {/* O Modal fica aqui no final */}
+            <RegistrationModal 
+              isOpen={isModalOpen} 
+              onClose={() => setIsModalOpen(false)} 
+            />
             <p className="mt-4 text-sm text-gray-500 font-medium">7 dias grátis. Cancele com 1 clique.</p>
           </div>
         </div>
@@ -328,10 +346,18 @@ export default function Home() {
           <h2 className="text-4xl md:text-5xl font-bold font-display text-white mb-8">
             Prontos para parar de brigar por dinheiro?
           </h2>
-          <button className="w-full sm:w-auto px-10 py-5 bg-[#25D366] text-white font-bold rounded-2xl hover:bg-[#20bd5a] transition-all flex items-center justify-center gap-3 shadow-xl shadow-[#25D366]/20 hover:scale-105 active:scale-95 text-xl mx-auto">
-            <MessageCircle className="w-7 h-7" />
-            Começar agora pelo WhatsApp
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-[#25D366] text-white px-8 py-4 rounded-2xl font-bold shadow-xl hover:scale-105 transition-all"
+          >
+            Testar Grátis Agora
           </button>
+
+          {/* O Modal fica aqui no final */}
+          <RegistrationModal 
+            isOpen={isModalOpen} 
+            onClose={() => setIsModalOpen(false)} 
+          />
         </div>
       </section>
 

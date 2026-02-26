@@ -8,7 +8,12 @@ export async function POST(req: Request) {
   try {
     const { name, owner_phone } = await req.json();
 
-    // Gera um token amigável (ex: ND-A1B2)
+    if (!owner_phone) {
+      return NextResponse.json({ error: 'WhatsApp do dono é obrigatório' }, { status: 400 });
+    }
+
+    // Gera um token de 6 caracteres (ex: ND-A1B2)
+    // Mais fácil para o usuário digitar no celular
     const token = `ND-${randomBytes(2).toString('hex').toUpperCase()}`;
 
     const { data, error } = await supabase
@@ -16,7 +21,8 @@ export async function POST(req: Request) {
       .insert({
         name: name || 'Novo Casal',
         owner_phone: owner_phone,
-        activation_token: token
+        activation_token: token,
+        // wa_group_id fica nulo aqui, será preenchido pelo /ativar no WhatsApp
       })
       .select()
       .single();
@@ -25,10 +31,12 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      token, 
-      message: 'Casal pré-cadastrado. Agora ative no WhatsApp.' 
+      token: token,
+      message: 'Registro criado! Use o token no WhatsApp.' 
     });
+
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('❌ Erro no Registro:', error.message);
+    return NextResponse.json({ error: 'Falha ao criar conta' }, { status: 500 });
   }
 }

@@ -68,10 +68,17 @@ export async function POST(req: NextRequest) {
       const base64Data = data.base64 || data.message?.imageMessage?.base64;
       if (!base64Data) throw new Error('Mídia não encontrada no payload');
       
+      // No fluxo de imagem do Webhook:
       const receipt = await analyzeReceipt(base64Data);
-      amount = receipt.valor_total;
-      description = receipt.estabelecimento;
-      category = receipt.categoria;
+
+      const { error: txError } = await supabase.from('transactions').insert({
+        couple_id: currentCouple.id,
+        payer_wa_number: payerNumber,
+        amount: receipt.valor_total, // Nome que vem do seu gemini-service
+        description: receipt.estabelecimento,
+        category: receipt.categoria,
+        ai_metadata: { source: 'gemini-1.5-flash', raw: receipt }
+      });
     } else {
       // ✍️ Processamento de Texto (Gemini Pro integrado aqui)
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
