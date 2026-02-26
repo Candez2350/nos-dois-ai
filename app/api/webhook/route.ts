@@ -8,21 +8,28 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin();
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+  // 1. PERSONALIDADE E REGRAS DO DUETTO (System Instructions)
+  const systemInstruction = `
+    Você é o Duetto, um assistente financeiro inteligente para casais.
+    Ao receber um gasto em texto, sua tarefa é extrair: valor, local e categoria.
+    REGRA: Retorne APENAS o JSON puro, sem explicações ou markdown.
+    CATEGORIAS PERMITIDAS: Alimentação, Lazer, Transporte, Casa, Saúde, Outros.
+    EXEMPLO: { "valor": 50.00, "local": "Mercado", "categoria": "Alimentação" }
+  `;
+
   try {
-    // 1. LER O CORPO APENAS UMA VEZ
+    // 2. LER O CORPO DA REQUISIÇÃO (Apenas uma vez)
     const body = await req.json();
     
-    // 2. LOG INTELIGENTE (Usando a variável 'body' que já foi lida)
+    // Log limpo para debug no painel da Vercel
     const bodyLog = { ...body };
     if (bodyLog.data?.base64) bodyLog.data.base64 = "[MUITO GRANDE]";
     if (bodyLog.data?.message?.imageMessage?.base64) bodyLog.data.message.imageMessage.base64 = "[MUITO GRANDE]";
-    
-    console.log('📦 [WEBHOOK] Payload recebido (limpo):', JSON.stringify(bodyLog));
+    console.log('📦 [WEBHOOK] Recebido:', JSON.stringify(bodyLog));
 
-    // 3. DESESTRUTURAR OS DADOS
     const { event, data } = body;
 
-    // Filtro inicial
+    // Filtro de evento e remetente
     if (event !== 'messages.upsert' || data.key?.fromMe) {
       return NextResponse.json({ message: 'Ignorado' }, { status: 200 });
     }
@@ -31,7 +38,7 @@ export async function POST(req: NextRequest) {
     const participantJid = data.key.participant || remoteJid;
     const payerNumber = participantJid.split('@')[0];
 
-    // Extração de texto aprimorada (captura texto simples, resposta com link e legenda de foto)
+    // Extração de conteúdo
     const messageContent = (
       data.message?.conversation || 
       data.message?.extendedTextMessage?.text || 
@@ -42,7 +49,7 @@ export async function POST(req: NextRequest) {
     const isImage = !!data.message?.imageMessage || data.messageType === 'imageMessage';
 
     // --- FLUXO 1: HANDSHAKE (/ativar) ---
-    if (messageContent.startsWith('/ativar')) {
+    if (messageContent.toLowerCase().startsWith('/ativar')) {
       const token = messageContent.split(' ')[1]?.trim();
       
       console.log(`🔑 Tentando ativar grupo ${remoteJid} com token ${token}`);
@@ -65,9 +72,8 @@ export async function POST(req: NextRequest) {
 
       if (updateError) throw updateError;
 
-      // 📢 RESPOSTA DE SUCESSO NO WHATSAPP
       await sendWhatsAppMessage(
-        `✅ *Ativação Concluída!*\n\nOlá! Eu sou o Duetto, o assistente financeiro de vocês. 🤖\n\nA partir de agora, qualquer gasto enviado aqui (foto ou texto) será anotado automaticamente. Vamos colocar essas finanças em ordem! 🚀`,
+        `✅ *Ativação Concluída!*\n\nOlá! Eu sou o Duetto, o assistente financeiro de vocês. 🤖\n\nA partir de agora, qualquer gasto enviado aqui será anotado automaticamente. Vamos organizar essas contas! 🚀`,
         remoteJid
       );
 
@@ -89,31 +95,46 @@ export async function POST(req: NextRequest) {
     let finalData = { valor: 0, local: '', categoria: '' };
 
     if (isImage) {
-      // Prioriza Base64 se a Evolution enviar, senão o analyzeReceipt trata
+      // 📸 Processamento de Imagem
       const base64Data = data.base64 || data.message?.imageMessage?.base64;
       const receipt = await analyzeReceipt(base64Data);
-      finalData = { valor: receipt.valor_total, local: receipt.estabelecimento, categoria: receipt.categoria };
+      finalData = { 
+        valor: receipt.valor_total, 
+        local: receipt.estabelecimento, 
+        categoria: receipt.categoria 
+      };
     } else {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const prompt = "Extraia o valor (number), local (string) e categoria (string) deste gasto. Responda apenas JSON puro.";
-      const result = await model.generateContent([prompt, messageContent]);
-      const parsed = JSON.parse(result.response.text().replace(/```json|```/g, ""));
-      finalData = { valor: parsed.valor, local: parsed.local, categoria: parsed.categoria };
+      // ✍️ Processamento de Texto (Gemini 2.0 Flash)
+      const model = genAI.getGenerativeModel({ 
+        model: "gemini-2.0-flash",
+        systemInstruction: systemInstruction 
+      });
+
+      const result = await model.generateContent(messageContent);
+      const responseText = result.response.text().replace(/```json|```/g, "").trim();
+      
+      const parsed = JSON.parse(responseText);
+      finalData = { 
+        valor: parsed.valor, 
+        local: parsed.local, 
+        categoria: parsed.categoria 
+      };
     }
 
+    // Gravação no Banco de Dados
     const { error: txError } = await supabase.from('transactions').insert({
       couple_id: currentCouple.id,
       payer_wa_number: payerNumber,
       amount: finalData.valor,
       description: finalData.local,
       category: finalData.categoria,
-      ai_metadata: { raw: finalData }
+      ai_metadata: { raw: finalData, model: isImage ? 'gemini-1.5-flash' : 'gemini-2.0-flash' }
     });
 
     if (txError) throw txError;
 
-    // 📢 CONFIRMAÇÃO DE GASTO NO WHATSAPP
-    const msgConfirmacao = `✅ *Gasto Anotado!*\n\n💰 *Valor:* R$ ${finalData.valor.toFixed(2)}\n📍 *Local:* ${finalData.local}\n📁 *Categoria:* ${finalData.categoria}\n👤 *Pago por:* @${payerNumber}`;
+    // 📢 CONFIRMAÇÃO NO WHATSAPP
+    const msgConfirmacao = `✅ *Anotado!*\n\n💰 *R$ ${finalData.valor.toFixed(2)}* no *${finalData.local}* (${finalData.categoria}).\n👤 Pago por @${payerNumber}`;
     
     await sendWhatsAppMessage(msgConfirmacao, remoteJid);
 
@@ -121,7 +142,6 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error('❌ Erro no Webhook:', error.message);
-    // Retornamos 200 para não travar a Evolution API, mas logamos o erro
-    return NextResponse.json({ error: 'Erro processado', detalhe: error.message }, { status: 200 });
+    return NextResponse.json({ error: 'Erro interno', detalhe: error.message }, { status: 200 });
   }
 }
