@@ -9,7 +9,17 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin();
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+  
+  
   try {
+    const rawBody = await req.json();
+    
+    // LOG INTELIGENTE: Remove o Base64 do log para não poluir
+    const bodyLog = { ...rawBody };
+    if (bodyLog.data?.base64) bodyLog.data.base64 = "[MUITO GRANDE]";
+    if (bodyLog.data?.message?.imageMessage?.base64) bodyLog.data.message.imageMessage.base64 = "[MUITO GRANDE]";
+    
+    console.log('📦 [WEBHOOK] Payload recebido (limpo):', JSON.stringify(bodyLog));
     const body = await req.json();
     const { event, data } = body;
 
