@@ -11,23 +11,31 @@ export async function sendWhatsAppMessage(text: string, remoteJid: string) {
       },
       body: JSON.stringify({
         number: remoteJid,
-        // Mudança aqui: de "text" para o objeto "textMessage"
         textMessage: {
           text: text
         }
       }),
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('❌ Erro Evolution API:', data);
-      throw new Error(`Erro Evolution: ${data.response?.message || 'Erro desconhecido'}`);
+    // 1. Verifica se a resposta é texto ou JSON para evitar o erro "Unexpected token u"
+    const contentType = response.headers.get("content-type");
+    
+    if (contentType && contentType.includes("application/json")) {
+      const data = await response.json();
+      if (!response.ok) {
+        console.error('❌ Erro Evolution API (JSON):', data);
+        throw new Error(`Erro Evolution: ${data.response?.message || 'Erro na API'}`);
+      }
+      return data;
+    } else {
+      // Se não for JSON, logamos o texto puro do erro (ex: erro de servidor do Koyeb)
+      const errorText = await response.text();
+      console.error('🔥 Erro de Infraestrutura (Não-JSON):', errorText);
+      throw new Error(`Servidor Evolution retornou erro de rede ou timeout.`);
     }
 
-    return data;
-  } catch (error) {
-    console.error('🔥 Falha ao enviar mensagem:', error);
+  } catch (error: any) {
+    console.error('🔥 Falha Crítica no Envio:', error.message);
     throw error;
   }
 }
