@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@theme {
+  --color-elo-green: #25D366;
+  --color-elo-dark: #1C1C1C;
+  --color-elo-white: #F5F5F5;
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-space-grotesk);
+}
+
+:root {
+  --background: var(--color-elo-white);
+  --foreground: var(--color-elo-dark);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
