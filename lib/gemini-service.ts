@@ -26,7 +26,7 @@ export async function analyzeExpense(input: { text?: string; imageBase64?: strin
     
     // Configuração para o modelo 2.5 Flash com saída JSON obrigatória
     const model = client.getGenerativeModel({
-      model: "gemma-3-27b", // Modelo com cota de 14.4k RPD
+      model: "gemma-3-27b-it", // Modelo com cota de 14.4k RPD
       generationConfig: {
         responseMimeType: "application/json",
       }
