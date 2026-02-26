@@ -3,9 +3,6 @@ export async function sendWhatsAppMessage(text: string, remoteJid: string) {
     const instance = process.env.EVOLUTION_INSTANCE_NAME;
     const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${instance}`;
 
-    // Garantimos que o número seja enviado sem espaços e exatamente como recebido
-    const targetNumber = remoteJid.trim();
-
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -13,24 +10,25 @@ export async function sendWhatsAppMessage(text: string, remoteJid: string) {
         'apikey': process.env.EVOLUTION_API_KEY || '',
       },
       body: JSON.stringify({
-        number: targetNumber,
-        textMessage: {
-          text: text
-        }
-        // Removido completamente o objeto 'options'
+        number: remoteJid, // O JID completo (ex: 12036... @g.us)
+        text: text         // Na v1.8.2, tente enviar o texto na raiz
       }),
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('❌ Detalhes do erro Evolution:', JSON.stringify(data, null, 2));
-      throw new Error(`Erro Evolution: ${data.response?.message || 'Rejeitado'}`);
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const data = await response.json();
+      if (!response.ok) {
+        console.error('❌ Rejeitado pela Evolution:', JSON.stringify(data, null, 2));
+        throw new Error(`Erro Evolution: ${data.response?.message || 'not-acceptable'}`);
+      }
+      return data;
+    } else {
+      const errorText = await response.text();
+      throw new Error(`Resposta do servidor não é JSON: ${errorText.substring(0, 50)}`);
     }
-
-    return data;
   } catch (error: any) {
-    console.error('🔥 Erro na função sendWhatsAppMessage:', error.message);
+    console.error('🔥 Erro no envio da mensagem:', error.message);
     throw error;
   }
 }
