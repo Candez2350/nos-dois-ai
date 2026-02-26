@@ -97,12 +97,20 @@ export async function POST(req: NextRequest) {
 
     // Chama o Gemini para entender o gasto
     if (isImage) {
-      const base64 = data.message?.base64 || 
-               data.base64 || 
-               data.message?.imageMessage?.jpegThumbnail;
+      const rawBase64 = data.message?.base64 || 
+                        data.base64 || 
+                        data.message?.imageMessage?.jpegThumbnail;
 
-      console.log("📸 [DEBUG] Tipo do base64:", typeof base64);
-      console.log("📸 [DEBUG] Valor do base64:", JSON.stringify(base64)?.substring(0, 100));expense = await analyzeExpense({ imageBase64: base64 });
+      console.log("📸 [DEBUG] Tipo do base64:", typeof rawBase64);
+
+      // Converte Buffer/objeto de bytes para string Base64 real
+      const base64 = (typeof rawBase64 === 'object' && rawBase64 !== null)
+        ? Buffer.from(Object.values(rawBase64) as number[]).toString('base64')
+        : rawBase64;
+
+      console.log("📸 [DEBUG] Base64 convertido:", typeof base64, base64?.substring(0, 30) + "...");
+
+      expense = await analyzeExpense({ imageBase64: base64 });
     } else {
       expense = await analyzeExpense({ text: messageContent });
     }
