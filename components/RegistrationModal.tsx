@@ -77,7 +77,7 @@ export default function RegistrationModal({ isOpen, onClose }: { isOpen: boolean
                   <input 
                     name="name" 
                     required 
-                    placeholder="Nome do Casal (ex: Roger e Juliana)" 
+                    placeholder="Nome do Casal (ex: Roger e Tamiris)" 
                     className="w-full p-4 rounded-2xl bg-gray-50 border border-gray-100 focus:border-[#25D366] outline-none transition-all"
                   />
                   <input 
