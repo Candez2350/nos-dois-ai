@@ -5,7 +5,7 @@ let genAI: GoogleGenerativeAI | null = null;
 function getGenAIClient() {
   if (!genAI) {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY ausente.");
+    if (!apiKey) throw new Error("Chave Gemini não configurada.");
     genAI = new GoogleGenerativeAI(apiKey);
   }
   return genAI;
@@ -18,49 +18,67 @@ export interface ExpenseData {
 }
 
 /**
- * Motor Único do Duetto: Processa Texto ou Imagem
+ * Motor Unificado: Extração de dados financeiros de forma genérica.
  */
 export async function analyzeExpense(input: { text?: string; imageBase64?: string }): Promise<ExpenseData> {
   try {
     const client = getGenAIClient();
-    // Forçamos a versão 'v1' para evitar o erro 404 da v1beta
-    const model = client.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
+    
+    // Configuração para o modelo 2.5 Flash com saída JSON obrigatória
+    const model = client.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+      }
+    });
 
-    const prompt = `
-      Você é o Duetto, assistente financeiro de um casal. 
-      Extraia os dados de gasto no formato JSON: {"valor": number, "local": string, "categoria": string}.
-      CATEGORIAS: Alimentação, Lazer, Transporte, Casa, Saúde, Outros.
-      Regra: Se o local não estiver claro, use "Gasto Geral". Se o valor for texto (ex: cem reais), converta para número (100).
-      RESPONDA APENAS O JSON PURO.
+    const systemInstruction = `
+      Você é um assistente de organização financeira. 
+      Sua única função é extrair dados de despesas a partir de mensagens de texto ou imagens de recibos.
+      
+      FORMATO DE SAÍDA (JSON):
+      {
+        "valor": number,
+        "local": string,
+        "categoria": "Alimentação" | "Lazer" | "Transporte" | "Casa" | "Saúde" | "Outros"
+      }
+
+      REGRAS:
+      - Se o valor não for identificado, retorne 0.
+      - Se o local não for identificado, use "Gasto Geral".
+      - Se o texto contiver o valor por extenso, converta para numeral.
+      - Retorne apenas o JSON puro.
     `;
 
     let result;
-
     if (input.imageBase64) {
-      // Processamento de Imagem (OCR)
       result = await model.generateContent([
-        { inlineData: { mimeType: 'image/jpeg', data: input.imageBase64.replace(/^data:image\/\w+;base64,/, '') } },
-        { text: prompt + " Analise esta imagem de recibo." }
+        { 
+          inlineData: { 
+            mimeType: 'image/jpeg', 
+            data: input.imageBase64.replace(/^data:image\/\w+;base64,/, '') 
+          } 
+        },
+        { text: systemInstruction }
       ]);
     } else {
-      // Processamento de Texto Direto
-      result = await model.generateContent(`${prompt} Texto do gasto: "${input.text}"`);
+      result = await model.generateContent(`${systemInstruction}\n\nTexto: "${input.text}"`);
     }
 
-    const responseText = result.response.text().replace(/```json|```/g, "").trim();
+    const responseText = result.response.text();
     const parsed = JSON.parse(responseText);
 
-    // Tratamento de segurança para valores (Lida com R$, vírgulas e pontos)
-    let valorFinal = 0;
+    // Tratamento de conversão para garantir que o valor seja numérico
+    let valorNumerico = 0;
     if (typeof parsed.valor === 'string') {
-      valorFinal = parseFloat(parsed.valor.replace(/[R$\s]/g, '').replace(',', '.'));
+      valorNumerico = parseFloat(parsed.valor.replace(/[^\d,.]/g, '').replace(',', '.'));
     } else {
-      valorFinal = parsed.valor || 0;
+      valorNumerico = parsed.valor || 0;
     }
 
     return {
-      valor: isNaN(valorFinal) ? 0 : valorFinal,
-      local: parsed.local || "Desconhecido",
+      valor: isNaN(valorNumerico) ? 0 : valorNumerico,
+      local: parsed.local || "Gasto Geral",
       categoria: parsed.categoria || "Outros"
     };
 
