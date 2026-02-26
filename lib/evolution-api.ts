@@ -1,40 +1,31 @@
 export async function sendWhatsAppMessage(text: string, remoteJid: string) {
   try {
     const instance = process.env.EVOLUTION_INSTANCE_NAME;
-    const apiKey = process.env.EVOLUTION_API_KEY;
-    const baseURL = process.env.EVOLUTION_API_URL;
+    const url = `${process.env.EVOLUTION_API_URL}/message/sendText/${instance}`;
 
-    if (!instance || !apiKey || !baseURL) {
-      throw new Error("Variáveis da Evolution API não configuradas na Vercel.");
-    }
-
-    // A rota correta para envio de texto na v1.8.2
-    const url = `${baseURL}/message/sendText/${instance}`;
+    // Garantimos que o número seja enviado sem espaços e exatamente como recebido
+    const targetNumber = remoteJid.trim();
 
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': apiKey,
+        'apikey': process.env.EVOLUTION_API_KEY || '',
       },
       body: JSON.stringify({
-        number: remoteJid, // Mantemos o JID completo (ex: 12036... @g.us)
+        number: targetNumber,
         textMessage: {
           text: text
-        },
-        options: {
-          delay: 1200,
-          presence: "composing",
-          linkPreview: false
         }
+        // Removido completamente o objeto 'options'
       }),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('❌ Resposta negativa da Evolution:', data);
-      throw new Error(`Erro Evolution: ${data.response?.message || 'Falha no envio'}`);
+      console.error('❌ Detalhes do erro Evolution:', JSON.stringify(data, null, 2));
+      throw new Error(`Erro Evolution: ${data.response?.message || 'Rejeitado'}`);
     }
 
     return data;
