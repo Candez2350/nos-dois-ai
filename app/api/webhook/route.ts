@@ -3,9 +3,9 @@ import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { analyzeReceipt } from '@/lib/gemini-service';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Handler para testes (Evita tela branca)
+// Handler para testes (Evita a tela branca no navegador)
 export async function GET() {
-  return NextResponse.json({ status: 'NósDois.ai Online 🚀' });
+  return NextResponse.json({ status: 'NósDois.ai Webhook Ativo 🚀' });
 }
 
 export async function POST(req: NextRequest) {
@@ -16,17 +16,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { event, data } = body;
 
-    // 1. Filtro: Só queremos mensagens novas
+    // 1. Filtro: Só mensagens de entrada e ignora as do próprio bot
     if (event !== 'messages.upsert' || data.key?.fromMe) {
       return NextResponse.json({ message: 'Evento ignorado' }, { status: 200 });
     }
 
-    const remoteJid = data.key.remoteJid; // ID do Grupo
-    const senderJid = data.key.participant || remoteJid; // Quem enviou
+    const remoteJid = data.key.remoteJid; 
+    const participantJid = data.key.participant || remoteJid;
+    const payerNumber = participantJid.split('@')[0]; // Pega só o número
+    
     const messageContent = data.message?.conversation || data.message?.extendedTextMessage?.text || "";
     const isImage = !!data.message?.imageMessage || data.messageType === 'imageMessage';
 
-    console.log(`📩 Mensagem de ${senderJid} no grupo ${remoteJid}`);
+    console.log(`📩 Mensagem de ${payerNumber} no grupo ${remoteJid}`);
 
     // --- FLUXO 1: HANDSHAKE (/ativar) ---
     if (messageContent.startsWith('/ativar')) {
@@ -35,70 +37,73 @@ export async function POST(req: NextRequest) {
 
       const { data: couple, error: searchError } = await supabase
         .from('couples')
-        .select('id')
+        .update({ wa_group_id: remoteJid })
         .eq('activation_token', token)
+        .select()
         .single();
 
       if (searchError || !couple) return NextResponse.json({ message: 'Token inválido' });
 
-      await supabase
-        .from('couples')
-        .update({ wa_group_id: remoteJid })
-        .eq('id', couple.id);
-
-      console.log(`✅ Grupo ${remoteJid} vinculado ao casal ${couple.id}`);
-      return NextResponse.json({ message: 'Handshake realizado' });
+      console.log(`✅ Handshake: Grupo ${remoteJid} ativado.`);
+      return NextResponse.json({ message: 'Ativado com sucesso' });
     }
 
     // --- FLUXO 2: PROCESSAMENTO DE GASTOS ---
     
-    // Verifica se o grupo já está ativado
-    const { data: currentCouple, error: coupleError } = await supabase
+    // Verifica autorização do grupo
+    const { data: currentCouple } = await supabase
       .from('couples')
       .select('id')
       .eq('wa_group_id', remoteJid)
       .single();
 
-    if (coupleError || !currentCouple) {
-      return NextResponse.json({ message: 'Grupo não ativado. Use /ativar [token]' });
+    if (!currentCouple) {
+      return NextResponse.json({ message: 'Grupo não autorizado' });
     }
 
-    let finalData = { valor: 0, local: 'Desconhecido', categoria: 'Outros' };
+    let amount = 0, description = '', category = '';
 
     if (isImage) {
-      // 📸 Processamento de Foto (Gemini Vision)
+      // 📸 Processamento de Foto (Gemini Vision via Helper)
       const base64Data = data.base64 || data.message?.imageMessage?.base64;
-      if (!base64Data) throw new Error('Buffer da imagem não encontrado');
+      if (!base64Data) throw new Error('Mídia não encontrada no payload');
       
       const receipt = await analyzeReceipt(base64Data);
-      finalData = { valor: receipt.valor_total, local: receipt.estabelecimento, categoria: receipt.categoria };
+      amount = receipt.valor_total;
+      description = receipt.estabelecimento;
+      category = receipt.categoria;
     } else {
-      // ✍️ Processamento de Texto (Gemini Pro)
+      // ✍️ Processamento de Texto (Gemini Pro integrado aqui)
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const prompt = "Extraia o valor (number), local (string) e categoria (string) deste gasto. Responda estritamente em JSON puro.";
+      const prompt = "Extraia o valor (number), local (string) e categoria (string) deste gasto. Responda estritamente em JSON puro: { \"valor\": 0.0, \"local\": \"\", \"categoria\": \"\" }";
+      
       const result = await model.generateContent([prompt, messageContent]);
       const responseText = result.response.text().replace(/```json|```/g, "").trim();
       
       const parsed = JSON.parse(responseText);
-      finalData = { valor: parsed.valor, local: parsed.local, categoria: parsed.categoria };
+      amount = parsed.valor;
+      description = parsed.local;
+      category = parsed.categoria;
     }
 
-    // Salva a transação no Supabase
-    const { error: dbError } = await supabase.from('transactions').insert({
+    // SALVAR NA TABELA TRANSACTIONS (Conforme seu SQL)
+    const { error: txError } = await supabase.from('transactions').insert({
       couple_id: currentCouple.id,
-      amount: finalData.valor,
-      description: finalData.local,
-      category: finalData.categoria,
-      paid_by: senderJid // Fundamental para o acerto de contas!
+      payer_wa_number: payerNumber,
+      amount: amount,
+      description: description,
+      category: category,
+      ai_metadata: { raw_response: isImage ? 'Gemini Vision Analysis' : 'Gemini Text Analysis' }
     });
 
-    if (dbError) throw dbError;
-    console.log(`💰 Gasto de R$ ${finalData.valor} registrado!`);
+    if (txError) throw txError;
+    console.log(`💰 Gasto de R$ ${amount} registrado para o número ${payerNumber}`);
 
-    return NextResponse.json({ status: 'success' });
+    return NextResponse.json({ success: true });
 
   } catch (error: any) {
     console.error('❌ Erro no Webhook:', error.message);
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+    // Retornamos 200 para evitar que a Evolution API fique tentando reenviar o erro infinitamente
+    return NextResponse.json({ error: 'Erro processado' }, { status: 200 });
   }
 }
