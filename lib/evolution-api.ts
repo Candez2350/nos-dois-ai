@@ -10,8 +10,10 @@ export async function sendWhatsAppMessage(text: string, remoteJid: string) {
         'apikey': process.env.EVOLUTION_API_KEY || '',
       },
       body: JSON.stringify({
-        number: remoteJid, // O JID completo (ex: 12036... @g.us)
-        text: text         // Na v1.8.2, tente enviar o texto na raiz
+        number: remoteJid, // O JID completo do grupo ou contato
+        textMessage: {
+          text: text    // Estrutura obrigatória exigida pela v1.8.2
+        }
       }),
     });
 
@@ -19,16 +21,16 @@ export async function sendWhatsAppMessage(text: string, remoteJid: string) {
     if (contentType && contentType.includes("application/json")) {
       const data = await response.json();
       if (!response.ok) {
-        console.error('❌ Rejeitado pela Evolution:', JSON.stringify(data, null, 2));
-        throw new Error(`Erro Evolution: ${data.response?.message || 'not-acceptable'}`);
+        console.error('❌ Resposta da API:', JSON.stringify(data, null, 2));
+        throw new Error(`Erro Evolution: ${data.response?.message || 'Falha de validação'}`);
       }
       return data;
     } else {
       const errorText = await response.text();
-      throw new Error(`Resposta do servidor não é JSON: ${errorText.substring(0, 50)}`);
+      throw new Error(`Servidor não retornou JSON: ${errorText.substring(0, 50)}`);
     }
   } catch (error: any) {
-    console.error('🔥 Erro no envio da mensagem:', error.message);
+    console.error('🔥 Erro na função sendWhatsAppMessage:', error.message);
     throw error;
   }
 }
