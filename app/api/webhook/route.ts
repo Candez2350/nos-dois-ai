@@ -40,11 +40,12 @@ export async function POST(req: NextRequest) {
     const remoteJid = data.key.remoteJid; 
     const participantJid = data.key.participant || remoteJid;
     const payerNumber = participantJid.split('@')[0];
+    const isImage = !!data.message?.imageMessage;
 
     // 2. MODO TESTADOR (ROGER)
     const isFromMe = data.key?.fromMe;
     if (isFromMe) {
-      const isAction = messageContent.startsWith('/') || messageContent.toLowerCase().includes('gastei');
+      const isAction = messageContent.startsWith('/') || messageContent.toLowerCase().includes('gastei') || isImage;
       if (!isAction) return NextResponse.json({ message: 'Auto-resposta ignorada' }, { status: 200 });
       console.log('🧪 Processando ação do próprio número (Roger)');
     }
@@ -92,7 +93,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Não autorizado' }, { status: 200 });
     }
 
-    const isImage = !!data.message?.imageMessage;
     let expense;
 
     // Chama o Gemini para entender o gasto

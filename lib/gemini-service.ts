@@ -52,11 +52,15 @@ export async function analyzeExpense(input: { text?: string; imageBase64?: strin
 
     let result;
     if (input.imageBase64) {
+      const cleanBase64 = input.imageBase64.includes(',') 
+        ? input.imageBase64.split(',')[1] 
+        : input.imageBase64;
       result = await model.generateContent([
+        {text: systemInstruction},
         { 
           inlineData: { 
             mimeType: 'image/jpeg', 
-            data: input.imageBase64.replace(/^data:image\/\w+;base64,/, '') 
+            data: cleanBase64
           } 
         },
         { text: systemInstruction }
