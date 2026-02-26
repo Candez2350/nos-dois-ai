@@ -1,6 +1,6 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-let genAI: GoogleGenAI | null = null;
+let genAI: GoogleGenerativeAI | null = null;
 
 function getGenAIClient() {
   if (!genAI) {
@@ -8,7 +8,7 @@ function getGenAIClient() {
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY is not defined in environment variables.");
     }
-    genAI = new GoogleGenAI({ apiKey });
+    genAI = new GoogleGenerativeAI(apiKey);
   }
   return genAI;
 }
@@ -19,74 +19,55 @@ export interface ReceiptData {
   categoria: string;
 }
 
-/**
- * Analisa uma imagem de cupom fiscal usando o Google Gemini Vision.
- * @param imageInput Buffer da imagem ou string Base64.
- * @returns Dados extraídos do cupom (valor, estabelecimento, categoria).
- */
 export async function analyzeReceipt(imageInput: Buffer | string): Promise<ReceiptData> {
   try {
     const client = getGenAIClient();
 
-    // Tratamento do input da imagem
     let imageBase64: string;
-    if (Buffer.isBuffer(imageInput)) {
+    if (typeof imageInput !== 'string') {
       imageBase64 = imageInput.toString('base64');
     } else {
-      // Remove prefixo de Data URI se existir (ex: "data:image/jpeg;base64,")
       imageBase64 = imageInput.replace(/^data:image\/\w+;base64,/, '');
     }
 
-    const model = 'gemini-2.5-flash-image';
-    const prompt = 'Extraia os seguintes dados deste cupom fiscal brasileiro: valor_total (number), estabelecimento (string), categoria (string). Se houver itens de mercado, saúde ou lazer, classifique corretamente. Retorne estritamente um JSON puro.';
+    const modelInstance = client.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = 'Extraia os seguintes dados deste cupom fiscal brasileiro: valor_total (number), estabelecimento (string), categoria (string). Retorne estritamente um JSON puro.';
 
-    const result = await client.models.generateContent({
-      model: model,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: 'image/jpeg', // O Gemini aceita JPEG/PNG genericamente neste campo
-              data: imageBase64,
-            },
-          },
-          { text: prompt },
-        ],
+    const result = await modelInstance.generateContent([
+      {
+        inlineData: {
+          mimeType: 'image/jpeg',
+          data: imageBase64,
+        },
       },
-      config: {
-        responseMimeType: 'application/json',
-        temperature: 0.1, // Baixa temperatura para maior precisão na extração de dados
-      }
-    });
+      { text: prompt },
+    ]);
 
-    const responseText = result.text;
+    const response = await result.response;
+    const responseText = response.text();
 
     if (!responseText) {
       throw new Error("A IA retornou uma resposta vazia.");
     }
 
-    let data: ReceiptData;
-    try {
-      data = JSON.parse(responseText);
-    } catch (error) {
-      console.error("Erro ao fazer parse do JSON do Gemini:", responseText);
-      throw new Error("Falha ao processar a resposta da IA: Formato inválido.");
+    const cleanJson = responseText.replace(/```json|```/g, "").trim();
+    
+    // Usamos 'any' aqui para evitar o erro de 'never' no TypeScript
+    const rawData = JSON.parse(cleanJson) as any;
+    
+    // Tratamos a conversão de valor de forma segura
+    let valorFinal = 0;
+    if (typeof rawData.valor_total === 'string') {
+      valorFinal = parseFloat(rawData.valor_total.replace(',', '.'));
+    } else if (typeof rawData.valor_total === 'number') {
+      valorFinal = rawData.valor_total;
     }
 
-    // Validação básica dos dados
-    if (typeof data.valor_total !== 'number') {
-      // Tenta corrigir se vier como string numérica
-      if (typeof data.valor_total === 'string') {
-        const parsed = parseFloat((data.valor_total as string).replace(',', '.'));
-        if (!isNaN(parsed)) {
-          data.valor_total = parsed;
-        } else {
-           throw new Error("Não foi possível identificar o valor total do cupom.");
-        }
-      } else {
-         throw new Error("Não foi possível identificar o valor total do cupom.");
-      }
-    }
+    const data: ReceiptData = {
+      valor_total: isNaN(valorFinal) ? 0 : valorFinal,
+      estabelecimento: rawData.estabelecimento || "Desconhecido",
+      categoria: rawData.categoria || "Outros"
+    };
 
     return data;
 
