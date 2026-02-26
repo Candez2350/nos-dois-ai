@@ -101,8 +101,8 @@ export async function POST(req: NextRequest) {
                data.base64 || 
                data.message?.imageMessage?.jpegThumbnail;
 
-      console.log("📸 [DEBUG] Base64 encontrado:", base64 ? "SIM (" + base64.substring(0, 30) + "...)" : "NÃO - undefined!");
-      expense = await analyzeExpense({ imageBase64: base64 });
+      console.log("📸 [DEBUG] Tipo do base64:", typeof base64);
+      console.log("📸 [DEBUG] Valor do base64:", JSON.stringify(base64)?.substring(0, 100));expense = await analyzeExpense({ imageBase64: base64 });
     } else {
       expense = await analyzeExpense({ text: messageContent });
     }
