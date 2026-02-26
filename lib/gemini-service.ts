@@ -26,7 +26,7 @@ export async function analyzeExpense(input: { text?: string; imageBase64?: strin
     
     // Configuração para o modelo 2.5 Flash com saída JSON obrigatória
     const model = client.getGenerativeModel({
-      model: "gemini-2.0-flash", // Use este ID para alinhar com o que aparece no seu painel
+      model: "gemini-2.0-flash-lite", // Use este ID para alinhar com o que aparece no seu painel
       generationConfig: {
         responseMimeType: "application/json",
       }
