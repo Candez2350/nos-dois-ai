@@ -97,7 +97,11 @@ export async function POST(req: NextRequest) {
 
     // Chama o Gemini para entender o gasto
     if (isImage) {
-      const base64 = data.message?.imageMessage?.base64 || data.base64;
+      const base64 = data.message?.base64 || 
+               data.base64 || 
+               data.message?.imageMessage?.jpegThumbnail;
+
+      console.log("📸 [DEBUG] Base64 encontrado:", base64 ? "SIM (" + base64.substring(0, 30) + "...)" : "NÃO - undefined!");
       expense = await analyzeExpense({ imageBase64: base64 });
     } else {
       expense = await analyzeExpense({ text: messageContent });
