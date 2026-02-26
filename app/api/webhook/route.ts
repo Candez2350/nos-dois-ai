@@ -97,18 +97,23 @@ export async function POST(req: NextRequest) {
 
     // Chama o Gemini para entender o gasto
     if (isImage) {
-      const rawBase64 = data.message?.base64 || 
-                        data.base64 || 
-                        data.message?.imageMessage?.jpegThumbnail;
+      // Busca a imagem em qualidade original via Evolution API
+      const mediaResponse = await fetch(
+        `${process.env.EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/nosdois`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': process.env.EVOLUTION_API_KEY!
+          },
+          body: JSON.stringify({ message: { key: data.key } })
+        }
+      );
 
-      console.log("📸 [DEBUG] Tipo do base64:", typeof rawBase64);
+      const mediaData = await mediaResponse.json();
+      const base64 = mediaData.base64;
 
-      // Converte Buffer/objeto de bytes para string Base64 real
-      const base64 = (typeof rawBase64 === 'object' && rawBase64 !== null)
-        ? Buffer.from(Object.values(rawBase64) as number[]).toString('base64')
-        : rawBase64;
-
-      console.log("📸 [DEBUG] Base64 convertido:", typeof base64, base64?.substring(0, 30) + "...");
+      console.log("📸 [DEBUG] Base64 da mídia original:", typeof base64, base64?.substring(0, 30) + "...");
 
       expense = await analyzeExpense({ imageBase64: base64 });
     } else {
