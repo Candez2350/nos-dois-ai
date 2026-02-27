@@ -15,6 +15,8 @@ export interface ExpenseData {
   valor: number;
   local: string;
   categoria: string;
+  data: string;               // Novo: YYYY-MM-DD
+  data_identificada: boolean; // Novo: Para sabermos se foi lido ou deduzido
 }
 
 export async function analyzeExpense(input: { text?: string; imageBase64?: string }): Promise<ExpenseData> {
@@ -46,12 +48,20 @@ export async function analyzeExpense(input: { text?: string; imageBase64?: strin
       --- CATEGORIAS DISPONÍVEIS ---
       "Alimentação", "Lazer", "Transporte", "Casa", "Saúde", "Outros"
 
-      --- FORMATO DE SAÍDA ---
-      Retorne APENAS o JSON puro, sem markdown, sem explicações:
+      --- REGRA DE DATA ---
+      1. Procure referências temporais: "hoje", "ontem", "anteontem", datas (10/02) ou dias da semana.
+      2. Se for uma imagem, procure a data de emissão.
+      3. IMPORTANTE: 
+        - Se encontrar uma data clara ou referência temporal no texto: "data_identificada": true.
+        - Se NÃO encontrar nada e precisar usar a data de hoje por padrão: "data_identificada": false.
+
+      FORMATO DE SAÍDA (JSON):
       {
         "valor": number,
         "local": string,
-        "categoria": string
+        "categoria": string,
+        "data": "YYYY-MM-DD",
+        "data_identificada": boolean
       }
 
       Se o valor não for identificado, retorne 0.
@@ -109,7 +119,9 @@ export async function analyzeExpense(input: { text?: string; imageBase64?: strin
     return {
       valor: isNaN(valorNumerico) ? 0 : valorNumerico,
       local: parsed.local || "Gasto Geral",
-      categoria: parsed.categoria || "Outros"
+      categoria: parsed.categoria || "Outros",
+      data: parsed.data || new Date().toISOString().split('T')[0],
+      data_identificada: !!parsed.data_identificada
     };
 
   } catch (error: any) {

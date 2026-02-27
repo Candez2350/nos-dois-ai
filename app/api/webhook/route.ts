@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { analyzeExpense } from '@/lib/gemini-service';
 import { sendWhatsAppMessage } from '@/lib/evolution-api';
+import { calculateSettlement } from '@/lib/finance-service';
+
+const parseDate = (dateStr: string) => {
+  const parts = dateStr.split('/');
+  if (parts.length !== 3) return null;
+  const [d, m, y] = parts;
+  const date = new Date(`${y}-${m}-${d}`);
+  return isNaN(date.getTime()) ? null : `${y}-${m}-${d}`;
+};
 
 export const config = {
   api: {
@@ -106,6 +115,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Não autorizado' }, { status: 200 });
     }
 
+    // --- NOVO FLUXO: FECHAMENTO DE PERÍODO ---
+    if (messageContent.toLowerCase().startsWith('/fechar')) {
+      const parts = messageContent.split(' ');
+      
+      if (parts.length < 3) {
+        await sendWhatsAppMessage("⚠️ *Uso:* /fechar DD/MM/AAAA DD/MM/AAAA", remoteJid);
+        return NextResponse.json({ message: 'Faltam datas' });
+      }
+
+      const startISO = parseDate(parts[1]);
+      const endISO = parseDate(parts[2]);
+
+      if (!startISO || !endISO) {
+        await sendWhatsAppMessage("❌ *Data inválida!*", remoteJid);
+        return NextResponse.json({ message: 'Data inválida' });
+      }
+
+      // Chama a função de cálculo e registro
+      const res = await calculateSettlement(currentCouple.id, startISO, endISO);
+
+      // 🛡️ GUARDA DE SEGURANÇA: Se res for null, interrompe aqui
+      if (!res) {
+        await sendWhatsAppMessage("📭 *Nada para fechar!*\nNão encontrei despesas pendentes nesse período ou elas já foram liquidadas.", remoteJid);
+        return NextResponse.json({ message: 'Sem transações pendentes' });
+      }
+
+      // Se chegou aqui, o res existe e podemos montar a mensagem
+      const msgFechamento = `📊 *BALANÇO DO PERÍODO*\n📅 ${res.periodRef}\n\n` +
+        `💰 *Total Gasto:* R$ ${res.totalGeral.toFixed(2)}\n` +
+        `⚖️ *Divisão:* ${res.splitType === 'EQUAL' ? '50/50' : 'Proporcional'}\n\n` +
+        `🤵 *${res.p1Name}:* R$ ${res.totalP1.toFixed(2)}\n` +
+        `👩‍💼 *${res.p2Name}:* R$ ${res.totalP2.toFixed(2)}\n\n` +
+        `🏁 *VEREDITO:* \n${res.amountToTransfer > 0 
+          ? `*${res.payerName}* deve enviar *R$ ${res.amountToTransfer.toFixed(2)}* para *${res.receiverName}*` 
+          : "As contas estão perfeitamente equilibradas! ✅"}`;
+
+      await sendWhatsAppMessage(msgFechamento, remoteJid);
+      return NextResponse.json({ success: true });
+    }
+
     let expense;
 
     // Chama o Gemini para entender o gasto
@@ -140,13 +189,21 @@ export async function POST(req: NextRequest) {
       amount: expense.valor,
       description: expense.local,
       category: expense.categoria,
-      ai_metadata: { source: isImage ? 'ocr' : 'text', raw: expense }
+      ai_metadata: { source: isImage ? 'ocr' : 'text', raw: expense, date_certainty: expense.data_identificada }
     });
 
     if (txError) throw txError;
 
     // Resposta formatada para o casal
-    const msgConfirmacao = `✅ *Anotado!*\n\n💰 *R$ ${expense.valor.toFixed(2)}*\n📍 *Local:* ${expense.local}\n📁 *Categoria:* ${expense.categoria}\n👤 *Por:* @${payerNumber}`;
+    let msgConfirmacao = `✅ *Anotado!*\n\n` +
+      `💰 *R$ ${expense.valor.toFixed(2)}*\n` +
+      `📅 *Data:* ${new Date(expense.data).toLocaleDateString('pt-BR')}\n` +
+      `📍 *Local:* ${expense.local}\n` +
+      `👤 *Por:* @${payerNumber}`;    
+    
+    if (!expense.data_identificada && isImage) {
+      msgConfirmacao += `\n\n⚠️ *Aviso:* Não consegui ler a data no recibo. Salvei como *hoje*. Foi isso mesmo?`;
+    }
     
     await sendWhatsAppMessage(msgConfirmacao, remoteJid);
 
