@@ -7,36 +7,41 @@ export async function calculateSettlement(
 ) {
   const supabase = getSupabaseAdmin();
   
-  // 1. Busca configuração e nomes dinâmicos
+  // 1. Busca a configuração básica do casal
   const { data: couple, error: coupleErr } = await supabase
     .from('couples')
-    .select(`
-      *,
-      p1:users!p1_wa_number(id, name),
-      p2:users!p2_wa_number(id, name)
-    `)
+    .select('*')
     .eq('id', coupleId)
     .single();
 
   if (!couple || coupleErr) throw new Error("Configuração do casal não encontrada.");
 
-  const p1Name = couple.p1?.name || "Parceiro 1";
-  const p2Name = couple.p2?.name || "Parceiro 2";
+  // 2. Busca os nomes dos parceiros na tabela users de forma independente
+  const { data: users } = await supabase
+    .from('users')
+    .select('id, name, wa_number')
+    .in('wa_number', [couple.p1_wa_number, couple.p2_wa_number]);
+
+  const p1User = users?.find(u => u.wa_number === couple.p1_wa_number);
+  const p2User = users?.find(u => u.wa_number === couple.p2_wa_number);
+
+  const p1Name = p1User?.name || "Parceiro 1";
+  const p2Name = p2User?.name || "Parceiro 2";
 
   const startOfDay = `${startDate}T00:00:00Z`;
   const endOfDay = `${endDate}T23:59:59Z`;
 
-  // 2. BUSCA ATIVA: Somente transações SEM settlement_id (não liquidadas)
+  // 3. Soma os gastos não liquidados no período (expense_date)
   const { data: transactions, error: txError } = await supabase
     .from('transactions')
-    .select('id, amount, payer_wa_number') // Buscamos o ID para poder atualizar depois
+    .select('id, amount, payer_wa_number')
     .eq('couple_id', coupleId)
-    .is('settlement_id', null) // <-- A TRAVA DE SEGURANÇA
-    .gte('expense_date', startDate) // <-- Mudança aqui
+    .is('settlement_id', null)
+    .gte('expense_date', startDate)
     .lte('expense_date', endDate);
 
   if (txError || !transactions || transactions.length === 0) {
-    return null; // Retorna nulo se não houver nada para fechar
+    return null; 
   }
 
   const totalP1 = transactions
@@ -59,41 +64,38 @@ export async function calculateSettlement(
 
   // 4. Motores de Cálculo
   if (couple.split_type === 'EQUAL') {
-    // Matemática: $T = \frac{|S_1 - S_2|}{2}$
     amountToTransfer = Math.abs(totalP1 - totalP2) / 2;
     const p1Deve = totalP1 < totalP2;
     
-    payerId = p1Deve ? couple.p1.id : couple.p2.id;
-    receiverId = p1Deve ? couple.p2.id : couple.p1.id;
+    payerId = p1Deve ? p1User?.id : p2User?.id;
+    receiverId = p1Deve ? p2User?.id : p1User?.id;
     payerName = p1Deve ? p1Name : p2Name;
     receiverName = p1Deve ? p2Name : p1Name;
 
   } else if (couple.split_type === 'PROPORTIONAL') {
-    // Matemática: $D_1 = G \times \frac{P_1}{100}$ | $Saldo = S_1 - D_1$
     const targetP1 = totalGeral * (p1Share / 100);
     const balanceP1 = totalP1 - targetP1;
 
     if (balanceP1 > 0) {
       amountToTransfer = balanceP1;
-      payerId = couple.p2.id;
-      receiverId = couple.p1.id;
+      payerId = p2User?.id;
+      receiverId = p1User?.id;
       payerName = p2Name;
       receiverName = p1Name;
     } else {
       amountToTransfer = Math.abs(balanceP1);
-      payerId = couple.p1.id;
-      receiverId = couple.p2.id;
+      payerId = p1User?.id;
+      receiverId = p2User?.id;
       payerName = p1Name;
       receiverName = p2Name;
     }
   }
 
-  // 5. REGISTRO E LIQUIDAÇÃO (O "SELAMENTO")
+  // 5. REGISTRO E LIQUIDAÇÃO
   const periodRef = `${new Date(startDate).toLocaleDateString('pt-BR')} a ${new Date(endDate).toLocaleDateString('pt-BR')}`;
   
-  if (amountToTransfer > 0) {
-    // A. Cria o registro na settlements e pega o ID gerado
-    const { data: settlementRecord, error: settleErr } = await supabase
+  if (amountToTransfer > 0 && payerId && receiverId) {
+    const { data: settlementRecord } = await supabase
       .from('settlements')
       .insert({
         couple_id: coupleId,
@@ -105,16 +107,13 @@ export async function calculateSettlement(
       .select('id')
       .single();
 
-    if (settleErr) throw settleErr;
-
-    // B. "Carimba" todas as transações usadas com o ID do settlement
-    const transactionIds = transactions.map(t => t.id);
-    const { error: updateError } = await supabase
-      .from('transactions')
-      .update({ settlement_id: settlementRecord.id })
-      .in('id', transactionIds);
-
-    if (updateError) throw updateError;
+    if (settlementRecord) {
+      const transactionIds = transactions.map(t => t.id);
+      await supabase
+        .from('transactions')
+        .update({ settlement_id: settlementRecord.id })
+        .in('id', transactionIds);
+    }
   }
 
   return {
