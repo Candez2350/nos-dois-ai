@@ -30,6 +30,8 @@ export async function analyzeExpense(input: { text?: string; imageBase64?: strin
       }
     });
 
+    const hoje = new Date();
+    const dataFormatada = hoje.toLocaleDateString('pt-BR');
     const systemInstruction = `
       Você é o Duetto, um assistente de organização financeira para casais brasileiros.
       Sua função é extrair dados de despesas a partir de mensagens de texto ou imagens de recibos/notas fiscais.
@@ -49,13 +51,15 @@ export async function analyzeExpense(input: { text?: string; imageBase64?: strin
       "Alimentação", "Lazer", "Transporte", "Casa", "Saúde", "Outros"
 
       --- REGRA DE DATA ---
-      1. Procure referências temporais: "hoje", "ontem", "anteontem", datas (10/02) ou dias da semana.
-      2. Se for uma imagem, procure a data de emissão.
-      3. IMPORTANTE: 
-        - Se encontrar uma data clara ou referência temporal no texto: "data_identificada": true.
-        - Se NÃO encontrar nada e precisar usar a data de hoje por padrão: "data_identificada": false.
-
+      Você é o Duetto. Hoje é dia ${dataFormatada}.
+      ESTAMOS NO ANO DE 2026. 
+      
+      --- REGRA DE DATA ---
+      1. Se o usuário disser "ontem", calcule a data baseada em ${dataFormatada} (deve resultar em 2026-02-25).
+      2. NUNCA utilize anos passados como 2024 ou 2025, a menos que o recibo explicitamente diga isso.
+      3. Se o texto não mencionar data, use 2026-02-26 e retorne "data_identificada": false.
       FORMATO DE SAÍDA (JSON):
+      
       {
         "valor": number,
         "local": string,
