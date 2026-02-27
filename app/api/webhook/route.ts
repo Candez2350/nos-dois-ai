@@ -13,11 +13,7 @@ const parseDate = (dateStr: string) => {
 };
 
 export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
+  api: { bodyParser: { sizeLimit: '10mb' } },
 };
 
 export async function POST(req: NextRequest) {
@@ -27,22 +23,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
 
     // 1. FILTROS DE INFRAESTRUTURA
-    if (body.event !== 'messages.upsert') {
-      return NextResponse.json({ message: 'Evento ignorado' }, { status: 200 });
-    }
-
-    // Filtro contra o erro 413: Ignora sincronização de histórico (type: append)
-    if (body.data?.type === 'append') {
-      return NextResponse.json({ message: 'Histórico ignorado' }, { status: 200 });
-    }
+    if (body.event !== 'messages.upsert') return NextResponse.json({ message: 'Evento ignorado' }, { status: 200 });
+    if (body.data?.type === 'append') return NextResponse.json({ message: 'Histórico ignorado' }, { status: 200 });
 
     const { data } = body;
     
-    // Extração do conteúdo (Trata texto simples, mensagens estendidas e legendas de imagem)
+    // Extração Robusta (Trata diferentes formatos da Evolution API)
     const messageContent = (
       data.message?.conversation || 
       data.message?.extendedTextMessage?.text || 
       data.message?.imageMessage?.caption || 
+      data.message?.videoMessage?.caption ||
       ""
     ).trim();
 
@@ -50,65 +41,45 @@ export async function POST(req: NextRequest) {
     const participantJid = data.key.participant || remoteJid;
     const payerNumber = participantJid.split('@')[0];
     const isImage = !!data.message?.imageMessage;
+    const isFromMe = !!data.key?.fromMe;
+
+    // 📡 LOG DE RADAR: Verificação inicial de toda mensagem
+    console.log(`📩 [LOG] De: ${remoteJid} | Texto: "${messageContent}" | isFromMe: ${isFromMe}`);
 
     // 2. MODO TESTADOR (ROGER)
-    const isFromMe = data.key?.fromMe;
     if (isFromMe) {
       const hasNumber = /\d+/.test(messageContent);
-      
-      // Lista de termos que geralmente indicam tempo ou contexto não financeiro
       const stopWords = ['minuto', 'min', 'hora', ' h ', 'segundo', 'dia', 'ano', 'feira'];
-      const isFalsePositive = stopWords.some(word => 
-        messageContent.toLowerCase().includes(word)
-      );
+      const isFalsePositive = stopWords.some(word => messageContent.toLowerCase().includes(word));
 
-      // Abre a porta se: for comando, tiver número (e não for tempo) ou for imagem
+      // Se for comando (/), imagem ou tiver número (sem ser tempo), prossegue
       const isAction = (messageContent.startsWith('/') || (hasNumber && !isFalsePositive)) || isImage; 
                        
       if (!isAction) {
-        return NextResponse.json({ message: 'Conversa comum ou tempo ignorado' }, { status: 200 });
+        console.log('🔇 [DEBUG] Roger conversando, ignorado.');
+        return NextResponse.json({ message: 'Conversa comum ignorada' }, { status: 200 });
       }
       
-      console.log('🧪 Analisando possível gasto real do Roger...');
+      console.log('🧪 [DEBUG] Analisando ação real do Roger...');
     }
 
-    // --- FLUXO 1: ATIVAÇÃO (/ativar TOKEN) ---
+    // --- FLUXO 1: ATIVAÇÃO ---
     if (messageContent.toLowerCase().startsWith('/ativar')) {
       const token = messageContent.split(' ')[1]?.trim();
-      
-      const { data: couple, error: fetchError } = await supabase
-        .from('couples')
-        .select('*')
-        .eq('activation_token', token)
-        .single();
+      const { data: couple, error: fetchError } = await supabase.from('couples').select('*').eq('activation_token', token).single();
 
       if (fetchError || !couple) {
-        await sendWhatsAppMessage("❌ Token inválido. Verifique o código e tente novamente.", remoteJid);
-        return NextResponse.json({ message: 'Token inválido' }, { status: 200 });
+        await sendWhatsAppMessage("❌ Token inválido.", remoteJid);
+        return NextResponse.json({ message: 'Token inválido' });
       }
 
-      // VINCULAÇÃO: Salva o ID do grupo no banco
-      const { error: updateError } = await supabase
-        .from('couples')
-        .update({ wa_group_id: remoteJid })
-        .eq('id', couple.id);
-
-      if (updateError) throw updateError;
-
-      await sendWhatsAppMessage(
-        `✅ *NósDois.ai Ativado!*\n\nOlá! Agora estou de olho nas contas de vocês! 🤖🚀`,
-        remoteJid
-      );
-
+      await supabase.from('couples').update({ wa_group_id: remoteJid }).eq('id', couple.id);
+      await sendWhatsAppMessage(`✅ *NósDois.ai Ativado!* 🤖🚀`, remoteJid);
       return NextResponse.json({ message: 'Ativado' });
     }
 
-    // --- FLUXO 2: PROCESSAMENTO DE GASTOS ---
-    const { data: currentCouple, error: coupleError } = await supabase
-      .from('couples')
-      .select('id')
-      .eq('wa_group_id', remoteJid)
-      .single();
+    // --- AUTORIZAÇÃO DO GRUPO ---
+    const { data: currentCouple, error: coupleError } = await supabase.from('couples').select('*').eq('wa_group_id', remoteJid).single();
 
     if (coupleError || !currentCouple) {
       console.log('⚠️ Grupo não autorizado:', remoteJid);
@@ -118,7 +89,6 @@ export async function POST(req: NextRequest) {
     // --- NOVO FLUXO: FECHAMENTO DE PERÍODO ---
     if (messageContent.toLowerCase().startsWith('/fechar')) {
       const parts = messageContent.split(' ');
-      
       if (parts.length < 3) {
         await sendWhatsAppMessage("⚠️ *Uso:* /fechar DD/MM/AAAA DD/MM/AAAA", remoteJid);
         return NextResponse.json({ message: 'Faltam datas' });
@@ -132,16 +102,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: 'Data inválida' });
       }
 
-      // Chama a função de cálculo e registro
       const res = await calculateSettlement(currentCouple.id, startISO, endISO);
 
-      // 🛡️ GUARDA DE SEGURANÇA: Se res for null, interrompe aqui
       if (!res) {
-        await sendWhatsAppMessage("📭 *Nada para fechar!*\nNão encontrei despesas pendentes nesse período ou elas já foram liquidadas.", remoteJid);
-        return NextResponse.json({ message: 'Sem transações pendentes' });
+        await sendWhatsAppMessage("📭 *Nada para fechar!*", remoteJid);
+        return NextResponse.json({ message: 'Sem pendências' });
       }
 
-      // Se chegou aqui, o res existe e podemos montar a mensagem
       const msgFechamento = `📊 *BALANÇO DO PERÍODO*\n📅 ${res.periodRef}\n\n` +
         `💰 *Total Gasto:* R$ ${res.totalGeral.toFixed(2)}\n` +
         `⚖️ *Divisão:* ${res.splitType === 'EQUAL' ? '50/50' : 'Proporcional'}\n\n` +
@@ -149,68 +116,59 @@ export async function POST(req: NextRequest) {
         `👩‍💼 *${res.p2Name}:* R$ ${res.totalP2.toFixed(2)}\n\n` +
         `🏁 *VEREDITO:* \n${res.amountToTransfer > 0 
           ? `*${res.payerName}* deve enviar *R$ ${res.amountToTransfer.toFixed(2)}* para *${res.receiverName}*` 
-          : "As contas estão perfeitamente equilibradas! ✅"}`;
+          : "Contas equilibradas! ✅"}`;
 
       await sendWhatsAppMessage(msgFechamento, remoteJid);
       return NextResponse.json({ success: true });
     }
 
+    // --- FLUXO 2: PROCESSAMENTO DE GASTOS ---
     let expense;
-
-    // Chama o Gemini para entender o gasto
     if (isImage) {
-      // Busca a imagem em qualidade original via Evolution API
-      const mediaResponse = await fetch(
-        `${process.env.EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/nosdois`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': process.env.EVOLUTION_API_KEY!
-          },
-          body: JSON.stringify({ message: { key: data.key } })
-        }
-      );
-
+      const mediaResponse = await fetch(`${process.env.EVOLUTION_API_URL}/chat/getBase64FromMediaMessage/nosdois`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': process.env.EVOLUTION_API_KEY! },
+        body: JSON.stringify({ message: { key: data.key } })
+      });
       const mediaData = await mediaResponse.json();
-      const base64 = mediaData.base64;
-
-      console.log("📸 [DEBUG] Base64 da mídia original:", typeof base64, base64?.substring(0, 30) + "...");
-
-      expense = await analyzeExpense({ imageBase64: base64 });
+      expense = await analyzeExpense({ imageBase64: mediaData.base64 });
     } else {
       expense = await analyzeExpense({ text: messageContent });
     }
 
-    // Salva a transação no Supabase
+    // Salva a transação com a NOVA coluna expense_date
     const { error: txError } = await supabase.from('transactions').insert({
       couple_id: currentCouple.id,
       payer_wa_number: payerNumber,
       amount: expense.valor,
       description: expense.local,
       category: expense.categoria,
-      ai_metadata: { source: isImage ? 'ocr' : 'text', raw: expense, date_certainty: expense.data_identificada }
+      expense_date: expense.data, // <-- IMPORTANTE: Adicionado conforme combinamos
+      ai_metadata: { 
+        source: isImage ? 'ocr' : 'text', 
+        raw: expense, 
+        date_certainty: expense.data_identificada 
+      }
     });
 
     if (txError) throw txError;
 
-    // Resposta formatada para o casal
     let msgConfirmacao = `✅ *Anotado!*\n\n` +
       `💰 *R$ ${expense.valor.toFixed(2)}*\n` +
       `📅 *Data:* ${new Date(expense.data).toLocaleDateString('pt-BR')}\n` +
       `📍 *Local:* ${expense.local}\n` +
       `👤 *Por:* @${payerNumber}`;    
     
-    if (!expense.data_identificada && isImage) {
-      msgConfirmacao += `\n\n⚠️ *Aviso:* Não consegui ler a data no recibo. Salvei como *hoje*. Foi isso mesmo?`;
+    // Pergunta inteligente sobre a data (texto ou foto)
+    if (!expense.data_identificada) {
+      msgConfirmacao += `\n\n⚠️ *Aviso:* Não identifiquei a data, salvei como *hoje*. Foi isso mesmo?`;
     }
     
     await sendWhatsAppMessage(msgConfirmacao, remoteJid);
-
     return NextResponse.json({ success: true });
 
   } catch (error: any) {
     console.error('🔥 Erro Crítico no Webhook:', error.message);
-    return NextResponse.json({ error: 'Erro processado internamente' }, { status: 200 });
+    return NextResponse.json({ error: 'Erro interno' }, { status: 200 });
   }
 }
