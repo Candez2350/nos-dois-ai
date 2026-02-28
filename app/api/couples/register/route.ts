@@ -22,7 +22,8 @@ export async function POST(req: Request) {
         name: name || 'Novo Casal',
         owner_phone: owner_phone,
         activation_token: token,
-        // wa_group_id fica nulo aqui, será preenchido pelo /ativar no WhatsApp
+        p1_wa_number: 'app_p1',
+        p2_wa_number: 'app_p2',
       })
       .select()
       .single();
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ 
       success: true, 
       token: token,
-      message: 'Registro criado! Use o token no WhatsApp.' 
+      message: 'Registro criado! Acesse o app com o código.' 
     });
 
   } catch (error: any) {

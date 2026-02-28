@@ -1,37 +1,51 @@
 import { getSupabaseAdmin } from 'lib/supabase-admin';
 
-export async function calculateSettlement(
-  coupleId: string, 
-  startDate: string, 
-  endDate: string
-) {
+export type BalanceResult = {
+  totalGeral: number;
+  totalP1: number;
+  totalP2: number;
+  p1Name: string;
+  p2Name: string;
+  amountToTransfer: number;
+  payerName: string;
+  receiverName: string;
+  periodRef: string;
+  splitType: string;
+};
+
+async function getBalanceInternal(
+  coupleId: string,
+  startDate: string,
+  endDate: string,
+  createSettlement: boolean
+): Promise<BalanceResult | null> {
   const supabase = getSupabaseAdmin();
-  
-  // 1. Busca a configuração básica do casal
+
   const { data: couple, error: coupleErr } = await supabase
     .from('couples')
     .select('*')
     .eq('id', coupleId)
     .single();
 
-  if (!couple || coupleErr) throw new Error("Configuração do casal não encontrada.");
+  if (!couple || coupleErr) throw new Error('Configuração do casal não encontrada.');
 
-  // 2. Busca os nomes dos parceiros na tabela users de forma independente
   const { data: users } = await supabase
     .from('users')
     .select('id, name, wa_number')
     .in('wa_number', [couple.p1_wa_number, couple.p2_wa_number]);
 
-  const p1User = users?.find(u => u.wa_number === couple.p1_wa_number);
-  const p2User = users?.find(u => u.wa_number === couple.p2_wa_number);
+  const p1User = users?.find((u) => u.wa_number === couple.p1_wa_number);
+  const p2User = users?.find((u) => u.wa_number === couple.p2_wa_number);
 
-  const p1Name = p1User?.name || "Parceiro 1";
-  const p2Name = p2User?.name || "Parceiro 2";
+  const p1Name =
+    p1User?.name ||
+    (couple as { partner_1_name?: string }).partner_1_name ||
+    'Parceiro 1';
+  const p2Name =
+    p2User?.name ||
+    (couple as { partner_2_name?: string }).partner_2_name ||
+    'Parceiro 2';
 
-  const startOfDay = `${startDate}T00:00:00Z`;
-  const endOfDay = `${endDate}T23:59:59Z`;
-
-  // 3. Soma os gastos não liquidados no período (expense_date)
   const { data: transactions, error: txError } = await supabase
     .from('transactions')
     .select('id, amount, payer_wa_number')
@@ -41,60 +55,55 @@ export async function calculateSettlement(
     .lte('expense_date', endDate);
 
   if (txError || !transactions || transactions.length === 0) {
-    return null; 
+    return null;
   }
 
-  const totalP1 = transactions
-    ?.filter(t => t.payer_wa_number === couple.p1_wa_number)
-    .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-
-  const totalP2 = transactions
-    ?.filter(t => t.payer_wa_number === couple.p2_wa_number)
-    .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-
+  const totalP1 =
+    transactions
+      ?.filter((t) => t.payer_wa_number === couple.p1_wa_number)
+      .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+  const totalP2 =
+    transactions
+      ?.filter((t) => t.payer_wa_number === couple.p2_wa_number)
+      .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
   const totalGeral = totalP1 + totalP2;
-  
+
   let amountToTransfer = 0;
-  let payerId = null;
-  let receiverId = null;
+  let payerId: string | null = null;
+  let receiverId: string | null = null;
   let payerName = '';
   let receiverName = '';
 
   const p1Share = couple.split_percentage_partner_1 || 50;
 
-  // 4. Motores de Cálculo
   if (couple.split_type === 'EQUAL') {
     amountToTransfer = Math.abs(totalP1 - totalP2) / 2;
     const p1Deve = totalP1 < totalP2;
-    
-    payerId = p1Deve ? p1User?.id : p2User?.id;
-    receiverId = p1Deve ? p2User?.id : p1User?.id;
+    payerId = p1Deve ? p1User?.id ?? null : p2User?.id ?? null;
+    receiverId = p1Deve ? p2User?.id ?? null : p1User?.id ?? null;
     payerName = p1Deve ? p1Name : p2Name;
     receiverName = p1Deve ? p2Name : p1Name;
-
   } else if (couple.split_type === 'PROPORTIONAL') {
     const targetP1 = totalGeral * (p1Share / 100);
     const balanceP1 = totalP1 - targetP1;
-
     if (balanceP1 > 0) {
       amountToTransfer = balanceP1;
-      payerId = p2User?.id;
-      receiverId = p1User?.id;
+      payerId = p2User?.id ?? null;
+      receiverId = p1User?.id ?? null;
       payerName = p2Name;
       receiverName = p1Name;
     } else {
       amountToTransfer = Math.abs(balanceP1);
-      payerId = p1User?.id;
-      receiverId = p2User?.id;
+      payerId = p1User?.id ?? null;
+      receiverId = p2User?.id ?? null;
       payerName = p1Name;
       receiverName = p2Name;
     }
   }
 
-  // 5. REGISTRO E LIQUIDAÇÃO
   const periodRef = `${new Date(startDate).toLocaleDateString('pt-BR')} a ${new Date(endDate).toLocaleDateString('pt-BR')}`;
-  
-  if (amountToTransfer > 0 && payerId && receiverId) {
+
+  if (createSettlement && amountToTransfer > 0 && payerId && receiverId) {
     const { data: settlementRecord } = await supabase
       .from('settlements')
       .insert({
@@ -102,13 +111,13 @@ export async function calculateSettlement(
         amount_settled: amountToTransfer,
         paid_by: payerId,
         received_by: receiverId,
-        month_reference: periodRef
+        month_reference: periodRef,
       })
       .select('id')
       .single();
 
     if (settlementRecord) {
-      const transactionIds = transactions.map(t => t.id);
+      const transactionIds = transactions.map((t) => t.id);
       await supabase
         .from('transactions')
         .update({ settlement_id: settlementRecord.id })
@@ -126,6 +135,24 @@ export async function calculateSettlement(
     payerName,
     receiverName,
     periodRef,
-    splitType: couple.split_type
+    splitType: couple.split_type,
   };
+}
+
+/** Retorna o saldo do período sem criar liquidação (para dashboard). */
+export async function getBalance(
+  coupleId: string,
+  startDate: string,
+  endDate: string
+): Promise<BalanceResult | null> {
+  return getBalanceInternal(coupleId, startDate, endDate, false);
+}
+
+/** Calcula e persiste o fechamento do período (liquidação). */
+export async function calculateSettlement(
+  coupleId: string,
+  startDate: string,
+  endDate: string
+): Promise<BalanceResult | null> {
+  return getBalanceInternal(coupleId, startDate, endDate, true);
 }

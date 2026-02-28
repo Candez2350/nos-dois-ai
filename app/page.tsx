@@ -46,11 +46,11 @@ export default function Home() {
             <a href="#preco" className="text-sm font-medium text-gray-600 hover:text-[#25D366] transition-colors">Preço</a>
           </nav>
           <a 
-            href="#comecar"
+            href="/login"
             className="bg-[#25D366] text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-[#20bd5a] transition-all shadow-md shadow-[#25D366]/20 flex items-center gap-2"
           >
             <MessageCircle className="w-4 h-4" />
-            <span className="hidden sm:inline">Testar Agora</span>
+            <span className="hidden sm:inline">Entrar</span>
           </a>
         </div>
       </header>
@@ -65,14 +65,14 @@ export default function Home() {
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#25D366]/10 text-[#1C1C1C] text-sm font-medium mb-8 border border-[#25D366]/20">
               <Sparkles className="w-4 h-4 text-[#25D366]" />
-              O 1º assistente financeiro para casais no WhatsApp
+              Assistente financeiro para casais
             </div>
             <h1 className="text-5xl md:text-7xl font-bold font-display text-[#1C1C1C] tracking-tight mb-8 leading-[1.1]">
               Fim das discussões por dinheiro. <br className="hidden md:block" />
               <span className="text-[#25D366]">Paz na sua relação.</span>
             </h1>
             <p className="text-xl text-gray-600 mb-12 leading-relaxed max-w-2xl mx-auto">
-              Apenas envie a foto do cupom fiscal no grupo do WhatsApp. Nossa Inteligência Artificial organiza tudo e gera o acerto no fim do mês. Sem planilhas, sem apps novos.
+              Registre gastos no chat (texto ou foto do cupom). A IA organiza tudo e o dashboard mostra quem deve quanto. Sem planilhas.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button 
@@ -81,6 +81,12 @@ export default function Home() {
               >
                 Testar Grátis Agora
               </button>
+              <a
+                href="/login"
+                className="text-[#25D366] font-bold hover:underline"
+              >
+                Já tenho conta — Entrar
+              </a>
 
               {/* O Modal fica aqui no final */}
               <RegistrationModal 
@@ -154,18 +160,18 @@ export default function Home() {
             {[
               {
                 icon: Receipt,
-                title: "1. Envie a foto",
-                desc: "Pagou algo? Basta enviar a foto do comprovante ou nota fiscal no grupo do WhatsApp de vocês com o nosso bot."
+                title: "1. Registre no chat",
+                desc: "Pagou algo? Envie a foto do comprovante ou escreva o valor no chat do app. A IA extrai e anota quem pagou."
               },
               {
                 icon: Bot,
                 title: "2. A IA processa",
-                desc: "O bot lê os valores automaticamente, categoriza o gasto e anota quem foi que pagou. Sem você digitar nada."
+                desc: "Valores e categorias são preenchidos automaticamente. Você só confirma no chat."
               },
               {
                 icon: CalendarCheck,
-                title: "3. Fechamento Mensal",
-                desc: "No dia combinado, vocês recebem um resumo claro e o valor exato do PIX para zerar as contas entre o casal."
+                title: "3. Dashboard e acerto",
+                desc: "Veja no dashboard o total do mês e quem deve quanto. Feche o período com um clique quando quiser liquidar."
               }
             ].map((step, i) => (
               <motion.div 
@@ -205,8 +211,8 @@ export default function Home() {
                   desc: "Powered by Google Gemini. Tire dúvidas financeiras e receba dicas de economia direto no chat."
                 },
                 {
-                  title: "Zero apps para instalar",
-                  desc: "Não ocupe a memória do celular. Tudo funciona 100% dentro do WhatsApp que vocês já usam todo dia."
+                  title: "Tudo em um lugar",
+                  desc: "Chat para registrar gastos e dashboard para ver saldo e fechar o mês. Acesso pelo navegador, sem instalar nada."
                 }
               ].map((feature, i) => (
                 <div key={i} className="flex gap-4">
@@ -321,7 +327,7 @@ export default function Home() {
               },
               {
                 q: "Preciso instalar algum aplicativo?",
-                a: "Não! Essa é a melhor parte. Tudo acontece diretamente no WhatsApp que você e seu parceiro(a) já utilizam todos os dias."
+                a: "Não! Acesse pelo navegador no celular ou no computador. Cadastre o casal, entre com o código e use o chat e o dashboard."
               },
               {
                 q: "Como funciona o cancelamento e reembolso?",
