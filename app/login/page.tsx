@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { MessageCircle, LogIn, User } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [code, setCode] = useState('');
@@ -142,5 +142,29 @@ export default function LoginPage() {
         </p>
       </div>
     </main>
+  );
+}
+
+function LoginFallback() {
+  return (
+    <main className="min-h-screen bg-[#F5F5F5] flex flex-col items-center justify-center p-4">
+      <Link href="/" className="flex items-center gap-2 mb-10 text-[#1C1C1C] hover:opacity-80">
+        <div className="w-10 h-10 bg-[#25D366] rounded-xl flex items-center justify-center">
+          <MessageCircle className="text-white w-6 h-6" />
+        </div>
+        <span className="text-xl font-bold">NósDois<span className="text-[#25D366]">.ai</span></span>
+      </Link>
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 p-8 flex items-center justify-center min-h-[320px]">
+        <p className="text-gray-500">Carregando...</p>
+      </div>
+    </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginForm />
+    </Suspense>
   );
 }
