@@ -40,41 +40,93 @@ export async function POST(req: NextRequest) {
     const displayName = partnerName?.trim() || `Parceiro ${partner}`;
     const role = partner === 1 ? 'partner_1' : 'partner_2';
 
-    const { data: user, error: userError } = await supabase
+    // Upsert user: tenta com role (após migração); se falhar (coluna inexistente), tenta sem role
+    const userPayload = {
+      couple_id: couple.id,
+      name: displayName,
+      whatsapp_number: waNum,
+    } as Record<string, unknown>;
+    const { data: userFromUpsert, error: userError } = await supabase
       .from('users')
-      .upsert(
-        {
-          couple_id: couple.id,
-          name: displayName,
-          whatsapp_number: waNum,
-          role,
-        },
-        { onConflict: 'whatsapp_number' }
-      )
+      .upsert({ ...userPayload, role }, { onConflict: 'whatsapp_number' })
       .select('id')
       .single();
 
-    if (userError || !user) {
-      console.error('Erro ao criar/atualizar user:', userError);
+    let userId: string | null = userFromUpsert?.id ?? null;
+    if (userError) {
+      const isColumnError =
+        String(userError.message || '').includes('role') ||
+        String(userError.code || '').includes('column');
+      if (isColumnError) {
+        const { data: userFallback, error: err2 } = await supabase
+          .from('users')
+          .upsert(userPayload, { onConflict: 'whatsapp_number' })
+          .select('id')
+          .single();
+        if (err2) {
+          console.error('Erro ao criar user (sem role):', err2);
+          return NextResponse.json(
+            { error: 'Erro ao registrar usuário. Execute a migração do banco (app_first_schema.sql).' },
+            { status: 500 }
+          );
+        }
+        userId = userFallback?.id ?? null;
+      } else {
+        console.error('Erro ao criar/atualizar user:', userError);
+        return NextResponse.json(
+          { error: userError.message || 'Erro ao registrar usuário.' },
+          { status: 500 }
+        );
+      }
+    } else {
+      userId = userFromUpsert?.id ?? null;
+    }
+
+    if (!userId) {
+      const { data: byWa } = await supabase
+        .from('users')
+        .select('id')
+        .eq('whatsapp_number', waNum)
+        .single();
+      userId = byWa?.id ?? null;
+    }
+    if (!userId) {
       return NextResponse.json(
-        { error: 'Erro ao registrar usuário.' },
+        { error: 'Não foi possível obter o usuário. Tente novamente.' },
         { status: 500 }
       );
     }
 
-    await supabase
+    const coupleUpdate: Record<string, unknown> = {
+      [partner === 1 ? 'p1_wa_number' : 'p2_wa_number']: waNum,
+    };
+    const partnerIdKey = partner === 1 ? 'partner_1_id' : 'partner_2_id';
+    coupleUpdate[partnerIdKey] = userId;
+
+    const { error: coupleUpdateError } = await supabase
       .from('couples')
-      .update({
-        [partner === 1 ? 'p1_wa_number' : 'p2_wa_number']: waNum,
-        [partner === 1 ? 'partner_1_id' : 'partner_2_id']: user.id,
-      })
+      .update(coupleUpdate)
       .eq('id', couple.id);
+
+    if (coupleUpdateError) {
+      const { error: coupleFallback } = await supabase
+        .from('couples')
+        .update({ [partner === 1 ? 'p1_wa_number' : 'p2_wa_number']: waNum })
+        .eq('id', couple.id);
+      if (coupleFallback) {
+        console.error('Erro ao atualizar casal:', coupleUpdateError, coupleFallback);
+        return NextResponse.json(
+          { error: 'Erro ao atualizar casal. Execute a migração do banco (app_first_schema.sql).' },
+          { status: 500 }
+        );
+      }
+    }
 
     await createSession({
       coupleId: couple.id,
       partner: partner as 1 | 2,
       partnerName: displayName,
-      userId: user.id,
+      userId,
       activationToken: token,
     });
 
@@ -84,9 +136,9 @@ export async function POST(req: NextRequest) {
       partner,
     });
   } catch (error: any) {
-    console.error('❌ Erro no login:', error.message);
+    console.error('❌ Erro no login:', error);
     return NextResponse.json(
-      { error: 'Erro ao fazer login.' },
+      { error: error?.message || 'Erro ao fazer login.' },
       { status: 500 }
     );
   }
