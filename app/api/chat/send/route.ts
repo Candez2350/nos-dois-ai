@@ -5,8 +5,8 @@ import { analyzeExpense } from '@/lib/gemini-service';
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
+  if (!session?.userId) {
+    return NextResponse.json({ error: 'Não autorizado. Faça login novamente.' }, { status: 401 });
   }
 
   try {
@@ -21,7 +21,6 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
-    const payerWaNumber = session.partner === 1 ? 'app_p1' : 'app_p2';
 
     const expense = await analyzeExpense(
       imageBase64 ? { imageBase64 } : { text: String(text).trim() }
@@ -29,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     const { error: txError } = await supabase.from('transactions').insert({
       couple_id: session.coupleId,
-      payer_wa_number: payerWaNumber,
+      payer_user_id: session.userId,
       amount: expense.valor,
       description: expense.local,
       category: expense.categoria,

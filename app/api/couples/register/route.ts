@@ -22,8 +22,6 @@ export async function POST(req: Request) {
         name: name || 'Novo Casal',
         owner_phone: owner_phone,
         activation_token: token,
-        p1_wa_number: 'app_p1',
-        p2_wa_number: 'app_p2',
       })
       .select()
       .single();

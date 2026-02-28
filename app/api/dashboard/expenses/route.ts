@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     let query = supabase
       .from('transactions')
-      .select('id, amount, description, category, expense_date, payer_wa_number, created_at')
+      .select('id, amount, description, category, expense_date, payer_user_id, payer_wa_number, created_at')
       .eq('couple_id', session.coupleId)
       .order('expense_date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -29,17 +29,19 @@ export async function GET(req: NextRequest) {
     const { data: transactions, error } = await query;
     if (error) throw error;
 
-    const { data: couple } = await supabase
-      .from('couples')
-      .select('partner_1_name, partner_2_name, p1_wa_number, p2_wa_number')
-      .eq('id', session.coupleId)
-      .single();
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, name, whatsapp_number')
+      .eq('couple_id', session.coupleId);
 
-    const partnerLabel = (wa: string) => {
-      if (wa === couple?.p1_wa_number) return (couple as { partner_1_name?: string }).partner_1_name || 'Parceiro 1';
-      if (wa === couple?.p2_wa_number) return (couple as { partner_2_name?: string }).partner_2_name || 'Parceiro 2';
-      return wa;
-    };
+    const nameByUserId = new Map(users?.map((u) => [u.id, u.name]) ?? []);
+    const nameByWa = new Map(users?.map((u) => [u.whatsapp_number, u.name]) ?? []);
+
+    const payerName = (t: { payer_user_id?: string | null; payer_wa_number?: string | null }) =>
+      (t.payer_user_id && nameByUserId.get(t.payer_user_id)) ||
+      (t.payer_wa_number && nameByWa.get(t.payer_wa_number)) ||
+      t.payer_wa_number ||
+      '—';
 
     const list = (transactions || []).map((t) => ({
       id: t.id,
@@ -47,7 +49,8 @@ export async function GET(req: NextRequest) {
       description: t.description,
       category: t.category,
       expense_date: t.expense_date,
-      payer: partnerLabel(t.payer_wa_number),
+      payer: payerName(t),
+      payer_user_id: t.payer_user_id,
       payer_wa_number: t.payer_wa_number,
       created_at: t.created_at,
     }));

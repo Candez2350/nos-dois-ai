@@ -8,6 +8,7 @@ export type AppSession = {
   coupleId: string;
   partner: 1 | 2;
   partnerName: string;
+  userId: string;
   activationToken: string;
 };
 

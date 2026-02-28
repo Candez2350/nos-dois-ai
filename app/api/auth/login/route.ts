@@ -36,27 +36,45 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const updates: Record<string, unknown> = {};
-    const p1Key = 'p1_wa_number';
-    const p2Key = 'p2_wa_number';
-    const name1Key = 'partner_1_name';
-    const name2Key = 'partner_2_name';
+    const waNum = `app_${couple.id}_${partner}`;
+    const displayName = partnerName?.trim() || `Parceiro ${partner}`;
+    const role = partner === 1 ? 'partner_1' : 'partner_2';
 
-    if (!couple[p1Key]) updates[p1Key] = 'app_p1';
-    if (!couple[p2Key]) updates[p2Key] = 'app_p2';
-    if (partnerName) {
-      if (partner === 1) updates[name1Key] = partnerName;
-      else updates[name2Key] = partnerName;
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .upsert(
+        {
+          couple_id: couple.id,
+          name: displayName,
+          whatsapp_number: waNum,
+          role,
+        },
+        { onConflict: 'whatsapp_number' }
+      )
+      .select('id')
+      .single();
+
+    if (userError || !user) {
+      console.error('Erro ao criar/atualizar user:', userError);
+      return NextResponse.json(
+        { error: 'Erro ao registrar usuário.' },
+        { status: 500 }
+      );
     }
 
-    if (Object.keys(updates).length > 0) {
-      await supabase.from('couples').update(updates).eq('id', couple.id);
-    }
+    await supabase
+      .from('couples')
+      .update({
+        [partner === 1 ? 'p1_wa_number' : 'p2_wa_number']: waNum,
+        [partner === 1 ? 'partner_1_id' : 'partner_2_id']: user.id,
+      })
+      .eq('id', couple.id);
 
     await createSession({
       coupleId: couple.id,
       partner: partner as 1 | 2,
-      partnerName: partnerName || (partner === 1 ? 'Parceiro 1' : 'Parceiro 2'),
+      partnerName: displayName,
+      userId: user.id,
       activationToken: token,
     });
 

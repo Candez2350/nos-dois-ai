@@ -29,26 +29,27 @@ async function getBalanceInternal(
 
   if (!couple || coupleErr) throw new Error('Configuração do casal não encontrada.');
 
+  const partner1Id = (couple as { partner_1_id?: string }).partner_1_id;
+  const partner2Id = (couple as { partner_2_id?: string }).partner_2_id;
+
   const { data: users } = await supabase
     .from('users')
-    .select('id, name, wa_number')
-    .in('wa_number', [couple.p1_wa_number, couple.p2_wa_number]);
+    .select('id, name, whatsapp_number')
+    .eq('couple_id', coupleId);
 
-  const p1User = users?.find((u) => u.wa_number === couple.p1_wa_number);
-  const p2User = users?.find((u) => u.wa_number === couple.p2_wa_number);
+  const p1User =
+    users?.find((u) => u.id === partner1Id) ??
+    users?.find((u) => u.whatsapp_number === couple.p1_wa_number);
+  const p2User =
+    users?.find((u) => u.id === partner2Id) ??
+    users?.find((u) => u.whatsapp_number === couple.p2_wa_number);
 
-  const p1Name =
-    p1User?.name ||
-    (couple as { partner_1_name?: string }).partner_1_name ||
-    'Parceiro 1';
-  const p2Name =
-    p2User?.name ||
-    (couple as { partner_2_name?: string }).partner_2_name ||
-    'Parceiro 2';
+  const p1Name = p1User?.name ?? 'Parceiro 1';
+  const p2Name = p2User?.name ?? 'Parceiro 2';
 
   const { data: transactions, error: txError } = await supabase
     .from('transactions')
-    .select('id, amount, payer_wa_number')
+    .select('id, amount, payer_user_id, payer_wa_number')
     .eq('couple_id', coupleId)
     .is('settlement_id', null)
     .gte('expense_date', startDate)
@@ -58,14 +59,17 @@ async function getBalanceInternal(
     return null;
   }
 
+  const isP1 = (t: { payer_user_id?: string | null; payer_wa_number?: string | null }) =>
+    (t.payer_user_id && t.payer_user_id === partner1Id) ||
+    (!t.payer_user_id && t.payer_wa_number === couple.p1_wa_number);
+  const isP2 = (t: { payer_user_id?: string | null; payer_wa_number?: string | null }) =>
+    (t.payer_user_id && t.payer_user_id === partner2Id) ||
+    (!t.payer_user_id && t.payer_wa_number === couple.p2_wa_number);
+
   const totalP1 =
-    transactions
-      ?.filter((t) => t.payer_wa_number === couple.p1_wa_number)
-      .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+    transactions?.filter(isP1).reduce((sum, t) => sum + Number(t.amount), 0) || 0;
   const totalP2 =
-    transactions
-      ?.filter((t) => t.payer_wa_number === couple.p2_wa_number)
-      .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+    transactions?.filter(isP2).reduce((sum, t) => sum + Number(t.amount), 0) || 0;
   const totalGeral = totalP1 + totalP2;
 
   let amountToTransfer = 0;
