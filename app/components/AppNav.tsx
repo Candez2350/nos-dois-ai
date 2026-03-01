@@ -1,6 +1,7 @@
+
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -12,8 +13,10 @@ import {
   LucideIcon,
 } from 'lucide-react';
 
-// Assuming AppNav is a component that takes navigation items and renders them.
-// If AppNav itself needs modification, please specify.
+// --- Import getSession --- 
+// Assuming getSession is available here to fetch user data on the client side.
+// If getSession is a server-only function, you'll need an alternative client-side fetch.
+import { getSession } from '@/lib/session'; // Assuming session fetching is possible client-side
 
 interface NavItem {
   href: string;
@@ -41,16 +44,44 @@ const navItems: NavItem[] = [
 ];
 
 interface AppNavProps {
-  partnerName?: string;
+  // partnerName prop is removed, AppNav will fetch it internally
 }
 
-export default function AppNav({ partnerName }: AppNavProps) {
+export default function AppNav(props: AppNavProps) {
   const pathname = usePathname();
+  const [partnerName, setPartnerName] = useState<string | null>(null);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+
+  useEffect(() => {
+    const fetchSession = async () => {
+      setIsLoadingSession(true);
+      try {
+        // IMPORTANT: Ensure getSession can be called client-side or provide a client-side API endpoint
+        // If getSession is server-only, you'll need a dedicated API route (e.g., /api/auth/session)
+        // that returns session data.
+        const session = await getSession(); // This might fail if getSession is server-only
+        if (session?.partnerName) {
+          setPartnerName(session.partnerName);
+        } else {
+          // Handle cases where session or partnerName is missing
+          setPartnerName('Parceiro(a)'); 
+        }
+      } catch (error) {
+        console.error('Failed to fetch session:', error);
+        setPartnerName('Parceiro(a)'); // Fallback
+      } finally {
+        setIsLoadingSession(false);
+      }
+    };
+
+    fetchSession();
+  }, []);
 
   // Placeholder for logout functionality
   const handleLogout = () => {
     // Implement logout logic here (e.g., clear session, redirect to login)
     console.log('Logout clicked');
+    // Example: window.location.href = '/logout';
   };
 
   return (
@@ -84,7 +115,7 @@ export default function AppNav({ partnerName }: AppNavProps) {
         {/* User Info and Logout */}
         <div className="flex items-center gap-4">
           <span className="text-gray-700 text-sm font-medium hidden sm:inline-block">
-            Olá, {partnerName || 'Parceiro(a)'}
+            {isLoadingSession ? 'Carregando...' : `Olá, ${partnerName || 'Parceiro(a)'}`}
           </span>
           <button
             onClick={handleLogout}
