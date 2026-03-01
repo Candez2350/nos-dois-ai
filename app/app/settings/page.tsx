@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, Save, Users, Percent, Lock } from 'lucide-react';
+import { Loader2, Save, Users, Percent, Lock, Sparkles, LogOut } from 'lucide-react';
+import Link from 'next/link';
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -13,6 +14,7 @@ export default function SettingsPage() {
     split_type: 'EQUAL',
     split_percentage_partner_1: 50,
     split_percentage_partner_2: 50,
+    ai_personality: 'CASUAL',
   });
 
   useEffect(() => {
@@ -32,6 +34,7 @@ export default function SettingsPage() {
             split_type: settData.couple.split_type || 'EQUAL',
             split_percentage_partner_1: settData.couple.split_percentage_partner_1 || 50,
             split_percentage_partner_2: settData.couple.split_percentage_partner_2 || 50,
+            ai_personality: settData.couple.ai_personality || 'CASUAL',
           });
         }
         setSession(sessData);
@@ -181,6 +184,36 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        <section className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="w-5 h-5 text-[#25D366]" />
+            <h2 className="font-bold text-gray-800">Preferências da IA</h2>
+          </div>
+          
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700">Personalidade</label>
+            <div className="grid grid-cols-2 gap-3">
+              {['CASUAL', 'FORMAL'].map((type) => (
+                <button
+                  key={type}
+                  disabled={!isP1}
+                  onClick={() => setForm({ ...form, ai_personality: type })}
+                  className={`p-3 rounded-xl border transition-all text-sm font-medium ${
+                    form.ai_personality === type
+                      ? 'border-[#25D366] bg-[#25D366]/5 text-[#25D366]'
+                      : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                  } disabled:opacity-60`}
+                >
+                  {type === 'CASUAL' ? 'Descontraída 😄' : 'Formal 🧐'}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500">
+              Define como a IA interage com vocês no chat.
+            </p>
+          </div>
+        </section>
+
         {isP1 && (
           <button
             onClick={handleSave}
@@ -191,6 +224,17 @@ export default function SettingsPage() {
             Salvar Configurações
           </button>
         )}
+
+        {/* Botão de Sair (Apenas Mobile) */}
+        <div className="md:hidden pt-6 border-t border-gray-200 mt-8">
+          <Link 
+            href="/api/auth/logout"
+            className="flex items-center justify-center gap-2 w-full p-4 text-red-500 font-bold bg-red-50 rounded-2xl hover:bg-red-100 transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+            Sair da conta
+          </Link>
+        </div>
       </div>
     </div>
   );

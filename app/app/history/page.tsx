@@ -1,128 +1,128 @@
-import React from 'react';
-import { Metadata } from 'next';
+'use client';
 
-// Assume these types are defined or inferred correctly from the API response
+import { useState, useEffect } from 'react';
+import { Calendar, DollarSign, Loader2, AlertCircle } from 'lucide-react';
+
 interface Settlement {
-  id: string | number;
-  couple_id: string | number;
+  id: string;
   amount_settled: number;
-  paid_by: string | number;
-  received_by: string | number;
+  paid_by: string;
+  received_by: string;
   month_reference: string;
   created_at: string;
-  payerName?: string;
-  receiverName?: string;
+  payer_name?: string;
+  receiver_name?: string;
 }
 
-// Mock function to fetch data - in a real app, this would call your API endpoint
-// For demonstration, we'll simulate fetching data that the backend provides.
-// In a real Next.js app, you might fetch directly from Supabase here if this is a Server Component,
-// or call your own API route if it's a Client Component.
-// Given the previous interaction, we'll assume a client-side fetch from /api/dashboard/history.
-async function getHistoryData(): Promise<Settlement[]> {
-  // IMPORTANT: In a real Next.js application, you would typically fetch data either:
-  // 1. Directly in a Server Component using supabase-admin.
-  // 2. By calling your own API route (e.g., /api/dashboard/history) from a Client Component.
-  // Since we previously worked on the API route, we'll simulate calling that route.
-  // If this `page.tsx` is intended to be a Server Component, the fetching logic
-  // would be different and more direct with supabase-admin.
+export default function HistoryPage() {
+  const [history, setHistory] = useState<Settlement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  // For now, simulating a client-side fetch:
-  try {
-    // Use process.env.NEXT_PUBLIC_BASE_URL or similar if your API is not at the root
-    const response = await fetch('/api/dashboard/history', {
-      // Add cache control if needed, or remove to ensure fresh data fetch
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      console.error('API Error response:', await response.text());
-      throw new Error(`HTTP error! status: ${response.status}`);
+  useEffect(() => {
+    async function fetchHistory() {
+      try {
+        const response = await fetch('/api/dashboard/history');
+        if (!response.ok) {
+          throw new Error('Falha ao carregar histórico');
+        }
+        const data = await response.json();
+        setHistory(data.history || []);
+      } catch (err) {
+        console.error(err);
+        setError('Não foi possível carregar o histórico.');
+      } finally {
+        setLoading(false);
+      }
     }
 
-    const data = await response.json();
-    if (Array.isArray(data.history)) {
-      return data.history;
-    } else {
-      console.error('Unexpected data format from API:', data);
-      return []; // Return empty array if format is wrong
-    }
-  } catch (error) {
-    console.error('Failed to fetch history:', error);
-    // In a Server Component, you'd handle this differently, possibly returning an error UI.
-    // For a Client Component, throwing or returning an empty array is common.
-    return []; // Return empty on error to prevent app crash
+    fetchHistory();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-[#25D366]" />
+      </div>
+    );
   }
-}
 
-export const metadata: Metadata = {
-  title: 'Histórico de Fechamentos',
-};
-
-// This page component will act as a Client Component by default if it uses hooks like useState/useEffect.
-// To make it a Server Component, remove useState/useEffect and fetch data directly.
-// For this implementation, let's assume it's a Client Component fetching from our API route.
-export default async function HistoryPage() {
-  // If this were a Server Component, you'd uncomment the line below and remove the commented client-side logic:
-  // const history = await getHistoryData(); 
-
-  // The following is for a Client Component implementation using useEffect/useState
-  // For simplicity in this direct file creation, we'll assume getHistoryData is called in a way
-  // that works for the context (e.g., if this page.tsx is marked 'use client').
-  // If it's a Server Component, the 'await getHistoryData()' call above would be used directly here.
-
-  const history = await getHistoryData(); // Assuming this page can directly await async operations
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-gray-500 gap-2">
+        <AlertCircle className="w-8 h-8 text-red-400" />
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6">Histórico de Fechamentos</h1>
+    <div className="max-w-4xl mx-auto">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-[#1C1C1C]">Histórico de Fechamentos</h1>
+        <p className="text-gray-500">Visualize os acertos de contas realizados anteriormente.</p>
+      </div>
 
       {history.length === 0 ? (
-        <p>Nenhum histórico de fechamento encontrado.</p>
+        <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm">
+          <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Calendar className="w-8 h-8 text-gray-300" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-800 mb-2">Nenhum fechamento ainda</h3>
+          <p className="text-gray-500">
+            Quando vocês realizarem o primeiro acerto de contas, ele aparecerá aqui.
+          </p>
+        </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 rounded-lg shadow-lg">
-            <thead className="bg-gray-50">
-              <tr>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Data do Fechamento
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Total do Mês
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Pagador
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Recebedor
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Mês Referência
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {history.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+        <div className="space-y-4">
+          {history.map((item) => (
+            <div 
+              key={item.id} 
+              className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-[#25D366]/30 transition-colors"
+            >
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-[#E7F8ED] rounded-xl flex items-center justify-center shrink-0">
+                  <DollarSign className="w-6 h-6 text-[#25D366]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-[#1C1C1C] text-lg">
+                      {item.month_reference}
+                    </span>
+                    <span className="text-xs px-2 py-1 bg-gray-100 rounded-full text-gray-600 font-medium">
+                      Liquidado
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-500 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
                     {new Date(item.created_at).toLocaleDateString('pt-BR')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-indigo-600">
-                    R$ {item.amount_settled.toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {item.payerName || 'Parceiro'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {item.receiverName || 'Parceiro'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {item.month_reference}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 pl-16 md:pl-0">
+                <div className="text-right">
+                  <div className="text-sm text-gray-500">Valor acertado</div>
+                  <div className="font-bold text-xl text-[#1C1C1C]">
+                    R$ {Number(item.amount_settled).toFixed(2)}
+                  </div>
+                </div>
+                
+                <div className="hidden md:block w-px h-10 bg-gray-100 mx-2"></div>
+
+                <div className="text-sm text-gray-600 flex flex-col gap-1 min-w-[140px]">
+                  <div className="flex items-center justify-between">
+                    <span>Pagou:</span>
+                    <span className="font-medium text-[#1C1C1C]">{item.payer_name || 'Parceiro'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Recebeu:</span>
+                    <span className="font-medium text-[#1C1C1C]">{item.receiver_name || 'Você'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
