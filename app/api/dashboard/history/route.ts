@@ -20,7 +20,9 @@ export async function GET() {
     .from('settlements')
     .select('id, couple_id, amount_settled, paid_by, received_by, month_reference, created_at')
     .eq('couple_id', session.coupleId)
-    .order('created_at', { ascending: false });
+    // Ensure ordering by created_at descending for latest history first
+    .order('created_at', { ascending: false })
+    ;
 
   if (error) {
     console.error('Erro ao listar fechamentos:', error);
@@ -50,6 +52,7 @@ export async function GET() {
 
   const formattedSettlements = (settlements || []).map(s => ({
     ...s,
+    // Ensure the keys match exactly what the frontend expects (payerName, receiverName)
     payerName: usersMap[s.paid_by] || 'Parceiro',
     receiverName: usersMap[s.received_by] || 'Parceiro',
   }));
