@@ -17,6 +17,7 @@ export default function RegistrationModal({ isOpen, onClose }: { isOpen: boolean
     const payload = {
       name: formData.get('name'),
       owner_phone: formData.get('phone'),
+      split_type: formData.get('split_type'),
     };
     try {
       const res = await fetch('/api/couples/register', {
@@ -79,6 +80,25 @@ export default function RegistrationModal({ isOpen, onClose }: { isOpen: boolean
                     placeholder="Seu WhatsApp (ex: 5521999999999)"
                     className="w-full p-4 rounded-2xl bg-gray-50 border border-gray-100 focus:border-[#25D366] outline-none transition-all"
                   />
+                  
+                  <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 space-y-3">
+                    <p className="font-medium text-gray-700">Forma de Divisão de Contas:</p>
+                    <label className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 cursor-pointer hover:border-[#25D366] transition-colors">
+                      <input type="radio" name="split_type" value="EQUAL" defaultChecked className="accent-[#25D366] w-5 h-5" />
+                      <div>
+                        <span className="block font-medium text-gray-800">50% / 50%</span>
+                        <span className="text-xs text-gray-500">Divisão igualitária para todas as contas</span>
+                      </div>
+                    </label>
+                    <label className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 cursor-pointer hover:border-[#25D366] transition-colors">
+                      <input type="radio" name="split_type" value="PROPORTIONAL" className="accent-[#25D366] w-5 h-5" />
+                      <div>
+                        <span className="block font-medium text-gray-800">Proporcional (Renda)</span>
+                        <span className="text-xs text-gray-500">Defina a porcentagem de cada um</span>
+                      </div>
+                    </label>
+                  </div>
+
                   <button
                     disabled={loading}
                     className="w-full py-4 bg-[#25D366] text-white font-bold rounded-2xl hover:bg-[#20bd5a] shadow-lg shadow-[#25D366]/20 transition-all flex items-center justify-center gap-2"

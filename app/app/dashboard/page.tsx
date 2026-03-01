@@ -61,6 +61,7 @@ export default function DashboardPage() {
   const [editForm, setEditForm] = useState({ amount: '', description: '', category: '', expense_date: '' });
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletionRequests, setDeletionRequests] = useState<Array<{ id: string; transaction_id: string; transaction?: { amount: number; description: string; category: string; expense_date: string }; created_at: string }>>([]);
+  const [adjustmentRequests, setAdjustmentRequests] = useState<Array<{ id: string; transaction_id: string; transaction: { amount: number; description: string; category: string; expense_date: string }; new_amount?: number; new_description?: string; new_category?: string; new_date?: string; created_at: string }>>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -108,6 +109,11 @@ export default function DashboardPage() {
       .then((d) => { if (d.requests) setDeletionRequests(d.requests); })
       .catch(() => {})
       .finally(() => setLoadingRequests(false));
+
+    fetch('/api/transactions/adjustment-requests')
+      .then((r) => r.json())
+      .then((d) => { if (d.requests) setAdjustmentRequests(d.requests); })
+      .catch(() => {});
   }, [monthParam]);
 
   function openEdit(e: Expense) {
@@ -124,8 +130,8 @@ export default function DashboardPage() {
     if (!editExpense) return;
     setSavingEdit(true);
     try {
-      const res = await fetch(`/api/transactions/${editExpense.id}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/transactions/${editExpense.id}/request-adjustment`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: parseFloat(editForm.amount) || 0,
@@ -134,19 +140,12 @@ export default function DashboardPage() {
           expense_date: editForm.expense_date,
         }),
       });
+      const data = await res.json();
       if (res.ok) {
         setEditExpense(null);
-        const [y, m] = monthParam.split('-').map(Number);
-        const start = `${monthParam}-01`;
-        const end = `${y}-${String(m).padStart(2, '0')}-${new Date(y, m, 0).getDate()}`;
-        const r = await fetch(`/api/dashboard/expenses?start=${start}&end=${end}`);
-        const data = await r.json();
-        if (r.ok) setExpenses(data.expenses ?? []);
-        setBalance(undefined);
-        setLoadingBalance(true);
-        const br = await fetch(`/api/dashboard/balance?month=${monthParam}`);
-        const bd = await br.json();
-        if (br.ok) setBalance(bd.balance ?? null);
+        alert('Solicitação de ajuste enviada. Aguarde aprovação do parceiro(a).');
+      } else {
+        alert(data.error || 'Erro ao salvar.');
       }
     } finally {
       setSavingEdit(false);
@@ -186,6 +185,38 @@ export default function DashboardPage() {
         const br = await fetch(`/api/dashboard/balance?month=${monthParam}`);
         const bd = await br.json();
         if (br.ok) setBalance(bd.balance ?? null);
+      } else alert(data.error || 'Erro.');
+    } catch {
+      alert('Erro ao responder.');
+    } finally {
+      setLoadingBalance(false);
+    }
+  }
+
+  async function respondAdjustment(requestId: string, action: 'approve' | 'reject') {
+    try {
+      const res = await fetch(`/api/transactions/adjustment-requests/${requestId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action === 'approve' ? 'approve' : 'reject' }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAdjustmentRequests((prev) => prev.filter((r) => r.id !== requestId));
+        if (action === 'approve') {
+          // Recarregar despesas e saldo
+          const [y, m] = monthParam.split('-').map(Number);
+          const start = `${monthParam}-01`;
+          const end = `${y}-${String(m).padStart(2, '0')}-${new Date(y, m, 0).getDate()}`;
+          const r = await fetch(`/api/dashboard/expenses?start=${start}&end=${end}`);
+          const d = await r.json();
+          if (r.ok) setExpenses(d.expenses ?? []);
+          setBalance(undefined);
+          setLoadingBalance(true);
+          const br = await fetch(`/api/dashboard/balance?month=${monthParam}`);
+          const bd = await br.json();
+          if (br.ok) setBalance(bd.balance ?? null);
+        }
       } else alert(data.error || 'Erro.');
     } catch {
       alert('Erro ao responder.');
@@ -376,6 +407,54 @@ export default function DashboardPage() {
         </section>
       )}
 
+      {/* Solicitações de ajuste (edição) pendentes */}
+      {adjustmentRequests.length > 0 && (
+        <section className="bg-blue-50 border border-blue-200 rounded-3xl p-6 mb-8">
+          <h2 className="text-lg font-bold text-blue-900 mb-4">Solicitações de edição</h2>
+          <p className="text-sm text-blue-800 mb-4">Seu parceiro(a) editou estes lançamentos. Confira as alterações.</p>
+          <ul className="space-y-3">
+            {adjustmentRequests.map((req) => (
+              <li key={req.id} className="bg-white rounded-xl p-4 border border-blue-100">
+                <div className="flex flex-col gap-2 mb-3">
+                  <div className="flex justify-between">
+                    <span className="text-xs font-bold text-gray-500 uppercase">Original</span>
+                    <span className="text-xs font-bold text-[#25D366] uppercase">Novo</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="text-gray-600">
+                      <p>{req.transaction.description}</p>
+                      <p>R$ {Number(req.transaction.amount).toFixed(2)}</p>
+                      <p>{req.transaction.category}</p>
+                      <p>{new Date(req.transaction.expense_date).toLocaleDateString('pt-BR')}</p>
+                    </div>
+                    <div className="text-[#1C1C1C] font-medium border-l pl-4 border-gray-100">
+                      <p>{req.new_description ?? req.transaction.description}</p>
+                      <p>R$ {Number(req.new_amount ?? req.transaction.amount).toFixed(2)}</p>
+                      <p>{req.new_category ?? req.transaction.category}</p>
+                      <p>{new Date(req.new_date ?? req.transaction.expense_date).toLocaleDateString('pt-BR')}</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-gray-50">
+                  <button
+                    onClick={() => respondAdjustment(req.id, 'reject')}
+                    className="px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50"
+                  >
+                    Rejeitar
+                  </button>
+                  <button
+                    onClick={() => respondAdjustment(req.id, 'approve')}
+                    className="px-3 py-1.5 rounded-lg bg-[#25D366] text-white text-sm font-medium hover:bg-[#20bd5a]"
+                  >
+                    Aprovar
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Gastos por categoria */}
       {!loadingExpenses && byCategory.length > 0 && (
         <section className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 mb-8">
@@ -511,7 +590,7 @@ export default function DashboardPage() {
               </button>
               <button type="button" onClick={saveEdit} disabled={savingEdit} className="flex-1 py-3 rounded-xl bg-[#25D366] text-white font-bold hover:bg-[#20bd5a] disabled:opacity-50 flex items-center justify-center gap-2">
                 {savingEdit ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
-                Salvar
+                Solicitar Ajuste
               </button>
             </div>
           </div>
