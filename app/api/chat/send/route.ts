@@ -26,21 +26,36 @@ export async function POST(req: NextRequest) {
       imageBase64 ? { imageBase64 } : { text: String(text).trim() }
     );
 
-    const { error: txError } = await supabase.from('transactions').insert({
-      couple_id: session.coupleId,
-      payer_user_id: session.userId,
-      amount: expense.valor,
-      description: expense.local,
-      category: expense.categoria,
-      expense_date: expense.data,
-      ai_metadata: {
-        source: imageBase64 ? 'ocr' : 'text',
-        raw: expense,
-        date_certainty: expense.data_identificada,
-      },
-    });
+    const { data: txRow, error: txError } = await supabase
+      .from('transactions')
+      .insert({
+        couple_id: session.coupleId,
+        payer_user_id: session.userId,
+        amount: expense.valor,
+        description: expense.local,
+        category: expense.categoria,
+        expense_date: expense.data,
+        ai_metadata: {
+          source: imageBase64 ? 'ocr' : 'text',
+          raw: expense,
+          date_certainty: expense.data_identificada,
+        },
+      })
+      .select('id')
+      .single();
 
-    if (txError) throw txError;
+    if (txError || !txRow) throw txError;
+
+    const userContent = text ? String(text).trim() : '[Foto de recibo]';
+    await supabase.from('chat_messages').insert([
+      { couple_id: session.coupleId, sender: 'user', content: userContent },
+      {
+        couple_id: session.coupleId,
+        sender: 'assistant',
+        content: `✅ Anotado!\n\n💰 R$ ${expense.valor.toFixed(2)}\n📅 ${new Date(expense.data).toLocaleDateString('pt-BR')}\n📍 ${expense.local}\n👤 ${session.partnerName}${!expense.data_identificada ? '\n\n⚠️ Data não identificada; salvei como hoje.' : ''}`,
+        transaction_id: txRow.id,
+      },
+    ]);
 
     let message =
       `✅ *Anotado!*\n\n` +

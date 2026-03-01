@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Send, ImagePlus, Loader2, Bot } from 'lucide-react';
 
 type Message = {
@@ -12,11 +12,31 @@ type Message = {
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [input, setInput] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch('/api/chat/history')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.messages?.length) {
+          setMessages(
+            data.messages.map((m: { id: string; role: string; content: string; expense?: { valor: number; local: string; categoria: string; data: string } }) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              expense: m.expense,
+            }))
+          );
+        }
+      })
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+  }, []);
 
   async function sendMessage(text?: string, file?: File) {
     const content = text?.trim() || (file ? 'Enviando imagem...' : '');
@@ -93,7 +113,12 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-2xl mx-auto">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
+        {historyLoading && (
+          <div className="flex justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-[#25D366]" />
+          </div>
+        )}
+        {!historyLoading && messages.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             <div className="w-16 h-16 bg-[#25D366]/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
               <Bot className="w-8 h-8 text-[#25D366]" />
@@ -104,7 +129,7 @@ export default function ChatPage() {
           </div>
         )}
 
-        {messages.map((msg) => (
+        {!historyLoading && messages.map((msg) => (
           <div
             key={msg.id}
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}

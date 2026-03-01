@@ -13,10 +13,11 @@ function getGenAIClient() {
 
 export interface ExpenseData {
   valor: number;
-  local: string;
-  categoria: string;
-  data: string;               // Novo: YYYY-MM-DD
-  data_identificada: boolean; // Novo: Para sabermos se foi lido ou deduzido
+  local: string;       // estabelecimento (ex: Mundial, Zara)
+  tipo?: string;       // tipo do gasto (ex: Mercado, Vestuário, Posto)
+  categoria: string;  // agrupamento para relatórios
+  data: string;
+  data_identificada: boolean;
 }
 
 export async function analyzeExpense(input: { text?: string; imageBase64?: string }): Promise<ExpenseData> {
@@ -33,43 +34,42 @@ export async function analyzeExpense(input: { text?: string; imageBase64?: strin
     const hoje = new Date();
     const dataFormatada = hoje.toLocaleDateString('pt-BR');
     const systemInstruction = `
-      Você é o Duetto, um assistente de organização financeira para casais brasileiros.
-      Sua função é extrair dados de despesas a partir de mensagens de texto ou imagens de recibos/notas fiscais.
+Você é o Duetto, assistente de organização financeira para casais brasileiros.
+Extraia dados de despesas a partir de mensagens de texto ou imagens de recibos/notas fiscais.
 
-      --- REGRAS PARA IMAGENS (OCR) ---
-      1. Leia TODA a imagem com atenção antes de responder.
-      2. O valor correto a extrair é o VALOR FINAL PAGO. Procure por: "Valor a Pagar", "Total Pago", "Valor Recebido", "Total", "TOTAL A PAGAR".
-      3. IGNORE subtotais, valores parciais e descontos intermediários.
-      4. O nome do estabelecimento geralmente aparece no TOPO da nota fiscal — use-o no campo "local".
-      5. Se houver CNPJ ou endereço, ignore — foque apenas no nome do estabelecimento e no valor final.
+--- IMAGENS (OCR) ---
+• Valor: use o VALOR FINAL PAGO (Total, Total a Pagar, Valor Recebido). Ignore subtotais.
+• local: nome do ESTABELECIMENTO (topo da nota). Ex: "Mundial", "Zara", "Posto Ipiranga".
+• tipo: o que foi comprado em uma palavra (Supermercado, Vestuário, Combustível, Farmácia, etc.).
+• categoria: use uma das categorias fixas listadas abaixo.
 
-      --- REGRAS PARA TEXTO ---
-      1. Identifique gastos em mensagens como "Gastei 50 no mercado" ou "Paguei R$ 30,00 no posto".
-      2. Converta valores por extenso para numerais (ex: "vinte reais" vira 20).
+--- TEXTO ---
+• "Gastei 95 no Mundial" → local="Mundial", tipo="Supermercado" ou "Mercado", categoria="Alimentação".
+• "Comprei 90 reais na Zara" → local="Zara", tipo="Vestuário", categoria="Vestuário" ou "Compras".
+• "Paguei 30 no posto" → local="Posto" (ou nome se disser), tipo="Combustível", categoria="Transporte".
+• Converta valores por extenso em número ("vinte reais" → 20).
 
-      --- CATEGORIAS DISPONÍVEIS ---
-      "Alimentação", "Lazer", "Transporte", "Casa", "Saúde", "Outros"
+--- CATEGORIAS (use EXATAMENTE uma) ---
+"Alimentação", "Lazer", "Transporte", "Casa", "Saúde", "Vestuário", "Compras", "Outros"
 
-      --- REGRA DE DATA ---
-      Você é o Duetto. Hoje é dia ${dataFormatada}.
-      ESTAMOS NO ANO DE 2026. 
-      
-      --- REGRA DE DATA ---
-      1. Se o usuário disser "ontem", calcule a data baseada em ${dataFormatada} (deve resultar em 2026-02-25).
-      2. NUNCA utilize anos passados como 2024 ou 2025, a menos que o recibo explicitamente diga isso.
-      3. Se o texto não mencionar data, use 2026-02-26 e retorne "data_identificada": false.
-      FORMATO DE SAÍDA (JSON):
-      
-      {
-        "valor": number,
-        "local": string,
-        "categoria": string,
-        "data": "YYYY-MM-DD",
-        "data_identificada": boolean
-      }
+--- DATA ---
+Hoje: ${dataFormatada}. Ano 2026.
+• "ontem" = dia anterior a hoje.
+• Sem data no texto → use a data de hoje e "data_identificada": false.
 
-      Se o valor não for identificado, retorne 0.
-      Se o local não for identificado, use "Gasto Geral".
+--- SAÍDA (JSON apenas) ---
+{
+  "valor": number,
+  "local": string,
+  "tipo": string,
+  "categoria": string,
+  "data": "YYYY-MM-DD",
+  "data_identificada": boolean
+}
+
+• valor não identificado → 0.
+• local não identificado → "Gasto Geral".
+• tipo não identificado → "Outros".
     `;
 
     let result;
@@ -123,9 +123,10 @@ export async function analyzeExpense(input: { text?: string; imageBase64?: strin
     return {
       valor: isNaN(valorNumerico) ? 0 : valorNumerico,
       local: parsed.local || "Gasto Geral",
+      tipo: parsed.tipo || undefined,
       categoria: parsed.categoria || "Outros",
       data: parsed.data || new Date().toISOString().split('T')[0],
-      data_identificada: !!parsed.data_identificada
+      data_identificada: !!parsed.data_identificada,
     };
 
   } catch (error: any) {

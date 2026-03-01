@@ -28,4 +28,7 @@ View your app in AI Studio: https://ai.studio/apps/dfff3623-3057-4e60-836e-714e4
 
 O schema é **app-first**: usuários têm `role` (partner_1/partner_2), casais têm `partner_1_id`/`partner_2_id` (FK para users), e transações têm `payer_user_id` (FK para users). `payer_wa_number` é opcional (legado/WhatsApp).
 
-**Migração:** execute o conteúdo de [supabase/migrations/20260228100000_app_first_schema.sql](supabase/migrations/20260228100000_app_first_schema.sql) no **SQL Editor** do Supabase antes de usar o app com o novo fluxo.
+**Migrações (SQL Editor do Supabase):** execute na ordem:  
+1. [app_first_schema.sql](supabase/migrations/20260228100000_app_first_schema.sql)  
+2. [chat_messages.sql](supabase/migrations/20260228110000_chat_messages.sql) (histórico do chat)  
+3. [deletion_requests.sql](supabase/migrations/20260228120000_deletion_requests.sql) (exclusão com validação do parceiro)
