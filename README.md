@@ -13,17 +13,17 @@ View your app in AI Studio: https://ai.studio/apps/dfff3623-3057-4e60-836e-714e4
 **Prerequisites:** Node.js
 
 1. Install dependencies: `npm install`
-2. Configure [.env.local](.env.local):
+2. Configure [.env.local](.env.local) (copie de [.env.example](.env.example)):
    - `GEMINI_API_KEY` – chave da API Gemini
    - `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` – projeto Supabase
-   - `SESSION_SECRET` – valor aleatório para sessão (ex: `openssl rand -hex 32`)
+   - **`SESSION_SECRET`** – obrigatório para o login (cookie assinado). Gere com: `openssl rand -hex 32`. Em produção (Vercel), defina em Settings → Environment Variables.
 3. Run the app: `npm run dev`
 
 ## Fluxo de uso (app)
 
 - **Registro:** na landing, “Testar Grátis” → nome do casal + WhatsApp → gera **código do casal** (ex: ND-A1B2).
 - **Login:** em `/login` (ou “Já tenho conta”), informe o código, escolha “Parceiro 1” ou “Parceiro 2” e opcionalmente seu nome. O primeiro login de cada parceiro cria/atualiza o usuário na tabela `users` e associa ao casal.
-- **Chat:** em `/app/chat`, envie texto ou foto de recibo; a IA extrai valor/local/categoria e grava em `transactions` com `payer_wa_number` no formato `app_{coupleId}_1` ou `_2`.
+- **Chat:** em `/app/chat`, envie texto ou foto de recibo; a IA extrai valor/local/categoria e grava em `transactions` com `payer_user_id` (user do parceiro logado).
 - **Dashboard:** em `/app/dashboard`, veja saldo do mês e lista de gastos; use “Fechar período e liquidar” para gerar o acerto e registrar em `settlements` (exige os dois usuários do casal em `users`).
 
 O schema é **app-first**: usuários têm `role` (partner_1/partner_2), casais têm `partner_1_id`/`partner_2_id` (FK para users), e transações têm `payer_user_id` (FK para users). `payer_wa_number` é opcional (legado/WhatsApp).

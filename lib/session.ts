@@ -14,8 +14,13 @@ export type AppSession = {
 
 function getSecret(): string {
   const secret = process.env.SESSION_SECRET;
-  if (!secret) throw new Error('SESSION_SECRET is not set');
-  return secret;
+  if (secret && secret.length >= 16) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'SESSION_SECRET não configurado. Defina em Vercel: Settings → Environment Variables (ex: openssl rand -hex 32).'
+    );
+  }
+  return 'nd-app-dev-secret-min-16-chars';
 }
 
 function encode(session: AppSession): string {
@@ -37,7 +42,8 @@ function decode(value: string): AppSession | null {
       createHmac('sha256', secret).update(payload).digest('hex')
     ).toString('base64url');
     if (signature !== expected) return null;
-    return JSON.parse(payload) as AppSession;
+    const session = JSON.parse(payload) as AppSession;
+    return session.userId ? session : null;
   } catch {
     return null;
   }
@@ -58,7 +64,11 @@ export async function getSession(): Promise<AppSession | null> {
   const cookieStore = await cookies();
   const value = cookieStore.get(COOKIE_NAME)?.value;
   if (!value) return null;
-  return decode(value);
+  try {
+    return decode(value);
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteSession(): Promise<void> {

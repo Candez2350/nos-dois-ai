@@ -62,8 +62,8 @@ function LoginForm() {
             <LogIn className="w-6 h-6 text-[#25D366]" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-[#1C1C1C]">Entrar no app</h1>
-            <p className="text-gray-500 text-sm">Use o código do casal e escolha quem é você</p>
+            <h1 className="text-2xl font-bold text-[#1C1C1C]">Entrar</h1>
+            <p className="text-gray-500 text-sm">Use o código que vocês receberam no cadastro. Cada um escolhe seu número (Parceiro 1 ou 2).</p>
           </div>
         </div>
 
@@ -75,13 +75,14 @@ function LoginForm() {
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="Ex: ND-A1B2"
+              autoComplete="off"
               className="w-full p-4 rounded-2xl bg-gray-50 border border-gray-100 focus:border-[#25D366] focus:ring-2 focus:ring-[#25D366]/20 outline-none transition-all font-mono uppercase"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Quem é você?</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Sou o(a)</label>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
@@ -108,15 +109,16 @@ function LoginForm() {
                 <span className="font-medium">Parceiro 2</span>
               </button>
             </div>
+            <p className="text-xs text-gray-400 mt-1">Quem criou o casal costuma ser o Parceiro 1.</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Seu nome (opcional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Meu nome (opcional)</label>
             <input
               type="text"
               value={partnerName}
               onChange={(e) => setPartnerName(e.target.value)}
-              placeholder="Como aparecer no app"
+              placeholder="Como aparecer no chat e no dashboard"
               className="w-full p-4 rounded-2xl bg-gray-50 border border-gray-100 focus:border-[#25D366] outline-none transition-all"
             />
           </div>
@@ -135,9 +137,9 @@ function LoginForm() {
         </form>
 
         <p className="mt-6 text-center text-sm text-gray-500">
-          Não tem código?{' '}
+          Ainda não tem código?{' '}
           <Link href="/" className="text-[#25D366] font-medium hover:underline">
-            Cadastre seu casal na página inicial
+            Cadastre o casal na página inicial
           </Link>
         </p>
       </div>
