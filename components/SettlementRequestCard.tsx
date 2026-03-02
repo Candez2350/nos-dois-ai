@@ -37,7 +37,7 @@ export default function SettlementRequestCard({
       window.location.reload(); // Força o recarregamento para atualizar o dashboard
     } catch (error) {
       console.error(error);
-      alert('Não foi possível aprovar o fechamento. Tente novamente.');
+      alert(`Não foi possível aprovar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setLoading(false);
     }
@@ -61,7 +61,7 @@ export default function SettlementRequestCard({
       window.location.reload(); // Força o recarregamento para atualizar o dashboard
     } catch (error) {
       console.error(error);
-      alert('Não foi possível rejeitar. Tente novamente.');
+      alert(`Não foi possível rejeitar: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
     } finally {
       setLoading(false);
     }

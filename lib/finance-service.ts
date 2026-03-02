@@ -218,7 +218,7 @@ export async function approveSettlement(settlementId: string, coupleId: string):
   }
 
   // Atualiza as transações do período
-  await supabase
+  const { error: txError } = await supabase
     .from('transactions')
     .update({ settlement_id: settlementId })
     .eq('couple_id', settlement.couple_id)
@@ -226,8 +226,15 @@ export async function approveSettlement(settlementId: string, coupleId: string):
     .gte('expense_date', settlement.start_date)
     .lte('expense_date', settlement.end_date);
 
+  if (txError) throw new Error(`Erro ao atualizar transações: ${txError.message}`);
+
   // Marca como concluído
-  await supabase.from('settlements').update({ status: 'COMPLETED' }).eq('id', settlementId);
+  const { error: settleError } = await supabase
+    .from('settlements')
+    .update({ status: 'COMPLETED' })
+    .eq('id', settlementId);
+
+  if (settleError) throw new Error(`Erro ao finalizar fechamento: ${settleError.message}`);
 
   // Notifica quem solicitou
   if (settlement.requested_by) {
@@ -256,7 +263,12 @@ export async function rejectSettlement(settlementId: string, coupleId: string): 
   }
 
   // Marca como rejeitado
-  await supabase.from('settlements').update({ status: 'REJECTED' }).eq('id', settlementId);
+  const { error } = await supabase
+    .from('settlements')
+    .update({ status: 'REJECTED' })
+    .eq('id', settlementId);
+
+  if (error) throw new Error(`Erro ao rejeitar: ${error.message}`);
 
   // Notifica quem solicitou
   if (settlement.requested_by) {
