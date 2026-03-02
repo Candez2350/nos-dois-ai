@@ -1,5 +1,5 @@
-import { getSupabaseAdmin } from 'lib/supabase-admin';
-import { sendWhatsAppMessage } from 'lib/evolution-api';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { sendWhatsAppMessage } from '@/lib/evolution-api';
 
 export type BalanceResult = {
   totalGeral: number;
@@ -176,6 +176,7 @@ export async function requestSettlement(
     start_date: startDate,
     end_date: endDate,
     status: 'PENDING',
+    total_expenses: balance.totalGeral,
     requested_by: requesterId,
   });
 
@@ -227,6 +228,16 @@ export async function approveSettlement(settlementId: string, coupleId: string):
 
   // Marca como concluído
   await supabase.from('settlements').update({ status: 'COMPLETED' }).eq('id', settlementId);
+
+  // Notifica quem solicitou
+  if (settlement.requested_by) {
+    const { data: requester } = await supabase.from('users').select('whatsapp_number, name').eq('id', settlement.requested_by).single();
+    if (requester?.whatsapp_number) {
+      try {
+        await sendWhatsAppMessage(`Olá ${requester.name}! ✅\n\nO fechamento de contas foi APROVADO pelo seu parceiro(a). 🎉\n\nAs despesas foram liquidadas e o histórico atualizado.`, requester.whatsapp_number);
+      } catch (e) { console.error('Erro zap aprovação', e); }
+    }
+  }
 }
 
 /** Rejeita o fechamento. */
@@ -246,4 +257,14 @@ export async function rejectSettlement(settlementId: string, coupleId: string): 
 
   // Marca como rejeitado
   await supabase.from('settlements').update({ status: 'REJECTED' }).eq('id', settlementId);
+
+  // Notifica quem solicitou
+  if (settlement.requested_by) {
+    const { data: requester } = await supabase.from('users').select('whatsapp_number, name').eq('id', settlement.requested_by).single();
+    if (requester?.whatsapp_number) {
+      try {
+        await sendWhatsAppMessage(`Olá ${requester.name}. ⚠️\n\nO fechamento de contas foi REJEITADO pelo seu parceiro(a).\n\nVerifique as despesas e tente novamente.`, requester.whatsapp_number);
+      } catch (e) { console.error('Erro zap rejeição', e); }
+    }
+  }
 }

@@ -7,7 +7,8 @@ import {
   LayoutDashboard, 
   History, 
   Settings, 
-  LogOut 
+  LogOut,
+  User
 } from 'lucide-react';
 
 export default function AppLayout({
@@ -22,6 +23,7 @@ export default function AppLayout({
     { icon: MessageCircle, label: 'Chat', href: '/app/chat' },
     { icon: LayoutDashboard, label: 'Dashboard', href: '/app/dashboard' },
     { icon: History, label: 'Histórico', href: '/app/history' },
+    { icon: User, label: 'Perfil', href: '/app/profile' },
     { icon: Settings, label: 'Ajustes', href: '/app/settings' },
   ];
 

@@ -1,87 +1,50 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
-
-// Inicializa o cliente Supabase com a chave de serviço para operações de backend
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { getSession } from '@/lib/session';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET() {
-  try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('elo_session');
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+  const supabase = getSupabaseAdmin();
+  const { data: couple } = await supabase
+    .from('couples')
+    .select('*')
+    .eq('id', session.coupleId)
+    .single();
 
-    const session = JSON.parse(sessionCookie.value);
-    const { coupleId } = session;
-
-    const { data: couple, error } = await supabase
-      .from('couples')
-      .select('*')
-      .eq('id', coupleId)
-      .single();
-
-    if (error) {
-      console.error('Erro ao buscar casal:', error);
-      return NextResponse.json({ error: 'Erro ao buscar dados' }, { status: 500 });
-    }
-
-    return NextResponse.json({ couple });
-  } catch (error) {
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
-  }
+  return NextResponse.json({ couple });
 }
 
 export async function PATCH(request: Request) {
-  try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('elo_session');
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
-    }
+  const body = await request.json();
+  const supabase = getSupabaseAdmin();
 
-    const session = JSON.parse(sessionCookie.value);
-    const { coupleId, partner } = session;
+  // Verifica se o usuário é o Parceiro 1
+  const { data: user } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', session.userId)
+    .single();
 
-    // Regra de Negócio: Apenas o Parceiro 1 pode editar configurações globais
-    if (partner !== 1) {
-      return NextResponse.json(
-        { error: 'Apenas o parceiro 1 pode alterar as configurações.' },
-        { status: 403 }
-      );
-    }
-
-    const body = await request.json();
-    const { 
-      name, 
-      split_type, 
-      split_percentage_partner_1, 
-      split_percentage_partner_2,
-      ai_personality 
-    } = body;
-
-    const { error } = await supabase
-      .from('couples')
-      .update({
-        name,
-        split_type,
-        split_percentage_partner_1,
-        split_percentage_partner_2,
-        ai_personality
-      })
-      .eq('id', coupleId);
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
+  if (user?.role !== 'partner_1') {
+    return NextResponse.json({ error: 'Apenas o Parceiro 1 pode alterar as configurações.' }, { status: 403 });
   }
+
+  const { error } = await supabase
+    .from('couples')
+    .update({
+      name: body.name,
+      split_type: body.split_type,
+      split_percentage_partner_1: body.split_percentage_partner_1,
+      split_percentage_partner_2: body.split_percentage_partner_2,
+    })
+    .eq('id', session.coupleId);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ success: true });
 }

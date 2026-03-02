@@ -34,7 +34,7 @@ export default function SettlementRequestCard({
         throw new Error(data.error || 'Erro ao aprovar');
       }
 
-      router.refresh(); // Atualiza os dados da página (Dashboard)
+      window.location.reload(); // Força o recarregamento para atualizar o dashboard
     } catch (error) {
       console.error(error);
       alert('Não foi possível aprovar o fechamento. Tente novamente.');
@@ -58,7 +58,7 @@ export default function SettlementRequestCard({
         throw new Error(data.error || 'Erro ao rejeitar');
       }
 
-      router.refresh();
+      window.location.reload(); // Força o recarregamento para atualizar o dashboard
     } catch (error) {
       console.error(error);
       alert('Não foi possível rejeitar. Tente novamente.');
