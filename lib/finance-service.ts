@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from 'lib/supabase-admin';
+import { sendWhatsAppMessage } from 'lib/evolution-api';
 
 export type BalanceResult = {
   totalGeral: number;
@@ -11,13 +12,18 @@ export type BalanceResult = {
   receiverName: string;
   periodRef: string;
   splitType: string;
+  p1Id: string;
+  p2Id: string;
+  p1Phone: string;
+  p2Phone: string;
+  payerId: string | null;
+  receiverId: string | null;
 };
 
 async function getBalanceInternal(
   coupleId: string,
   startDate: string,
-  endDate: string,
-  createSettlement: boolean
+  endDate: string
 ): Promise<BalanceResult | null> {
   const supabase = getSupabaseAdmin();
 
@@ -107,28 +113,6 @@ async function getBalanceInternal(
 
   const periodRef = `${new Date(startDate).toLocaleDateString('pt-BR')} a ${new Date(endDate).toLocaleDateString('pt-BR')}`;
 
-  if (createSettlement && amountToTransfer > 0 && payerId && receiverId) {
-    const { data: settlementRecord } = await supabase
-      .from('settlements')
-      .insert({
-        couple_id: coupleId,
-        amount_settled: amountToTransfer,
-        paid_by: payerId,
-        received_by: receiverId,
-        month_reference: periodRef,
-      })
-      .select('id')
-      .single();
-
-    if (settlementRecord) {
-      const transactionIds = transactions.map((t) => t.id);
-      await supabase
-        .from('transactions')
-        .update({ settlement_id: settlementRecord.id })
-        .in('id', transactionIds);
-    }
-  }
-
   return {
     totalGeral,
     totalP1,
@@ -140,6 +124,12 @@ async function getBalanceInternal(
     receiverName,
     periodRef,
     splitType: couple.split_type,
+    p1Id: p1User?.id ?? '',
+    p2Id: p2User?.id ?? '',
+    p1Phone: p1User?.whatsapp_number ?? '',
+    p2Phone: p2User?.whatsapp_number ?? '',
+    payerId,
+    receiverId,
   };
 }
 
@@ -149,14 +139,70 @@ export async function getBalance(
   startDate: string,
   endDate: string
 ): Promise<BalanceResult | null> {
-  return getBalanceInternal(coupleId, startDate, endDate, false);
+  return getBalanceInternal(coupleId, startDate, endDate);
 }
 
-/** Calcula e persiste o fechamento do período (liquidação). */
-export async function calculateSettlement(
+/** Solicita o fechamento (cria pendência e notifica o parceiro). */
+export async function requestSettlement(
   coupleId: string,
   startDate: string,
-  endDate: string
-): Promise<BalanceResult | null> {
-  return getBalanceInternal(coupleId, startDate, endDate, true);
+  endDate: string,
+  requesterId: string
+): Promise<{ success: boolean; message: string }> {
+  const balance = await getBalanceInternal(coupleId, startDate, endDate);
+  if (!balance) throw new Error('Não há dados para fechar neste período.');
+
+  const supabase = getSupabaseAdmin();
+
+  // Cria o registro de settlement com status PENDING
+  const { error } = await supabase.from('settlements').insert({
+    couple_id: coupleId,
+    amount_settled: balance.amountToTransfer,
+    paid_by: balance.payerId,
+    received_by: balance.receiverId,
+    month_reference: balance.periodRef,
+    start_date: startDate,
+    end_date: endDate,
+    status: 'PENDING',
+    requested_by: requesterId,
+  });
+
+  if (error) throw new Error(`Erro ao criar solicitação: ${error.message}`);
+
+  // Notifica o outro parceiro
+  const isP1Requester = requesterId === balance.p1Id;
+  const targetPhone = isP1Requester ? balance.p2Phone : balance.p1Phone;
+  const targetName = isP1Requester ? balance.p2Name : balance.p1Name;
+  const requesterName = isP1Requester ? balance.p1Name : balance.p2Name;
+
+  if (targetPhone) {
+    const msg = `Olá ${targetName}! 💑\n\n${requesterName} solicitou o fechamento das contas de ${balance.periodRef}.\n\nValor do acerto: R$ ${balance.amountToTransfer.toFixed(2)}\nQuem paga: ${balance.payerName}\n\nAcesse o app para aprovar: https://nosdois.ai/app/dashboard`;
+    await sendWhatsAppMessage(msg, targetPhone);
+  }
+
+  return { success: true, message: 'Solicitação enviada para aprovação!' };
+}
+
+/** Aprova o fechamento e atualiza as transações. */
+export async function approveSettlement(settlementId: string, coupleId: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+
+  const { data: settlement } = await supabase.from('settlements').select('*').eq('id', settlementId).single();
+  if (!settlement) throw new Error('Solicitação não encontrada.');
+
+  if (settlement.couple_id !== coupleId) {
+    throw new Error('Você não tem permissão para aprovar esta liquidação.');
+  }
+
+  // Atualiza as transações do período
+  await supabase
+    .from('transactions')
+    .update({ settlement_id: settlementId })
+    .eq('couple_id', settlement.couple_id)
+    .is('settlement_id', null)
+    .gte('expense_date', settlement.start_date)
+    .lte('expense_date', settlement.end_date);
+
+  // Marca como concluído
+  await supabase.from('settlements').update({ status: 'COMPLETED' }).eq('id', settlementId);
 }
