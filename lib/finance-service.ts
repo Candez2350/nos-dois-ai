@@ -154,6 +154,18 @@ export async function requestSettlement(
 
   const supabase = getSupabaseAdmin();
 
+  // 1. Verificar se já existe solicitação pendente (Regra 3)
+  const { data: existing } = await supabase
+    .from('settlements')
+    .select('id')
+    .eq('couple_id', coupleId)
+    .eq('status', 'PENDING')
+    .maybeSingle();
+
+  if (existing) {
+    throw new Error('Já existe uma solicitação de fechamento pendente. Aguarde a aprovação ou rejeição.');
+  }
+
   // Cria o registro de settlement com status PENDING
   const { error } = await supabase.from('settlements').insert({
     couple_id: coupleId,
@@ -211,4 +223,19 @@ export async function approveSettlement(settlementId: string, coupleId: string):
 
   // Marca como concluído
   await supabase.from('settlements').update({ status: 'COMPLETED' }).eq('id', settlementId);
+}
+
+/** Rejeita o fechamento. */
+export async function rejectSettlement(settlementId: string, coupleId: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+
+  const { data: settlement } = await supabase.from('settlements').select('*').eq('id', settlementId).single();
+  if (!settlement) throw new Error('Solicitação não encontrada.');
+
+  if (settlement.couple_id !== coupleId) {
+    throw new Error('Você não tem permissão para rejeitar esta liquidação.');
+  }
+
+  // Marca como rejeitado
+  await supabase.from('settlements').update({ status: 'REJECTED' }).eq('id', settlementId);
 }

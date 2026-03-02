@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Loader2, XCircle } from 'lucide-react';
 
 interface SettlementRequestProps {
   id: string;
@@ -43,6 +43,30 @@ export default function SettlementRequestCard({
     }
   }
 
+  async function handleReject() {
+    if (!confirm('Tem certeza que deseja rejeitar este fechamento?')) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/settlements/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settlementId: id }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Erro ao rejeitar');
+      }
+
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+      alert('Não foi possível rejeitar. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6 mb-6 relative overflow-hidden shadow-sm">
       {/* Efeito de fundo */}
@@ -67,10 +91,20 @@ export default function SettlementRequestCard({
               </span>
             </div>
 
+            <div className="flex gap-3 w-full sm:w-auto">
+              <button
+                onClick={handleReject}
+                disabled={loading}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-50 transition-all disabled:opacity-70"
+              >
+                <XCircle className="w-5 h-5" />
+                Rejeitar
+              </button>
+
             <button
               onClick={handleApprove}
               disabled={loading}
-              className="flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold rounded-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-sm shadow-[#25D366]/20"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold rounded-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed shadow-sm shadow-[#25D366]/20"
             >
               {loading ? (
                 <>
@@ -84,6 +118,7 @@ export default function SettlementRequestCard({
                 </>
               )}
             </button>
+            </div>
           </div>
         </div>
       </div>

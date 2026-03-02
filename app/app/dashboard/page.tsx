@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { createClient } from '@/lib/supabase-browser';
 import {
   Receipt,
   Calendar,
@@ -14,7 +15,9 @@ import {
   Trash2,
   X,
   Check,
+  Clock,
 } from 'lucide-react';
+import SettlementRequestCard from '@/components/SettlementRequestCard';
 
 const CATEGORIAS = ['Alimentação', 'Lazer', 'Transporte', 'Casa', 'Saúde', 'Vestuário', 'Compras', 'Outros'];
 
@@ -64,6 +67,14 @@ export default function DashboardPage() {
   const [adjustmentRequests, setAdjustmentRequests] = useState<Array<{ id: string; transaction_id: string; transaction: { amount: number; description: string; category: string; expense_date: string }; new_amount?: number; new_description?: string; new_category?: string; new_date?: string; created_at: string }>>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [settlementRequest, setSettlementRequest] = useState<{
+    id: string;
+    amount: number;
+    period: string;
+    requesterName: string;
+    isRequester: boolean;
+  } | null>(null);
+  const [session, setSession] = useState<{ coupleId: string } | null>(null);
 
   useEffect(() => {
     async function fetchBalance() {
@@ -102,7 +113,7 @@ export default function DashboardPage() {
     fetchExpenses();
   }, [monthParam]);
 
-  useEffect(() => {
+  const fetchRequests = useCallback(() => {
     setLoadingRequests(true);
     fetch('/api/transactions/deletion-requests')
       .then((r) => r.json())
@@ -114,7 +125,51 @@ export default function DashboardPage() {
       .then((r) => r.json())
       .then((d) => { if (d.requests) setAdjustmentRequests(d.requests); })
       .catch(() => {});
-  }, [monthParam]);
+
+    // Busca solicitação de fechamento pendente
+    fetch('/api/dashboard/settlement-requests')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.request) {
+          setSettlementRequest({ ...data.request, isRequester: data.isRequester });
+        } else {
+          setSettlementRequest(null);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchRequests();
+  }, [monthParam, fetchRequests]);
+
+  // Efeito para buscar a sessão do usuário
+  useEffect(() => {
+    fetch('/api/auth/session').then(res => res.json()).then(data => {
+      if (data.coupleId) setSession(data);
+    });
+  }, []);
+
+  // Efeito para Realtime (escuta mudanças nos fechamentos)
+  useEffect(() => {
+    if (!session?.coupleId) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`settlements-channel-${session.coupleId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settlements', filter: `couple_id=eq.${session.coupleId}`},
+        (payload) => {
+          // Ao receber qualquer evento (INSERT, UPDATE, DELETE), re-buscamos os dados das solicitações
+          fetchRequests();
+        }
+      )
+      .subscribe();
+
+    // Cleanup: remove a inscrição ao desmontar o componente
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session, fetchRequests]);
 
   function openEdit(e: Expense) {
     setEditExpense(e);
@@ -249,6 +304,12 @@ export default function DashboardPage() {
         const r = await fetch(`/api/dashboard/balance?month=${monthParam}`);
         const d = await r.json();
         if (r.ok) setBalance(d.balance ?? null);
+        
+        // Atualiza estado da solicitação pendente
+        if (data.settlement) {
+           // Força um refresh simples recarregando a página ou atualizando o estado local
+           window.location.reload(); 
+        }
       } else {
         setCloseResult({ success: false, message: data.error || 'Erro ao fechar.' });
       }
@@ -305,6 +366,26 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Card de Solicitação de Fechamento (Aprovação) */}
+      {settlementRequest && !settlementRequest.isRequester && (
+        <SettlementRequestCard
+          id={settlementRequest.id}
+          amount={settlementRequest.amount}
+          payerName={settlementRequest.requesterName}
+          period={settlementRequest.period}
+        />
+      )}
+
+      {/* Mensagem de Status para quem solicitou */}
+      {settlementRequest && settlementRequest.isRequester && (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-8 flex items-center gap-3 text-blue-800">
+          <Clock className="w-5 h-5 shrink-0" />
+          <p className="text-sm font-medium">
+            Você solicitou o fechamento de <strong>{settlementRequest.period}</strong>. Aguardando aprovação do seu parceiro(a).
+          </p>
+        </div>
+      )}
+
       {/* Resumo do período — cards em destaque */}
       <section className="bg-gradient-to-br from-[#1C1C1C] to-[#2d2d2d] rounded-3xl border border-gray-800 shadow-xl p-6 sm:p-8 mb-8 text-white">
         <h2 className="text-lg font-semibold text-white/90 mb-6 flex items-center gap-2">
@@ -354,7 +435,7 @@ export default function DashboardPage() {
               </div>
               <button
                 onClick={handleClosePeriod}
-                disabled={closing || balance.amountToTransfer <= 0}
+                disabled={closing || balance.amountToTransfer <= 0 || !!settlementRequest}
                 className="shrink-0 w-full sm:w-auto px-6 py-3 rounded-xl bg-[#25D366] text-white font-bold hover:bg-[#20bd5a] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
               >
                 {closing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
