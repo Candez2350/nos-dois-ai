@@ -1,66 +1,55 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createClient } from '@supabase/supabase-js';
+import { getSession } from '@/lib/session';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('elo_session');
-
-    if (!sessionCookie) {
+    const session = await getSession();
+    if (!session) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const session = JSON.parse(sessionCookie.value);
-    const { coupleId } = session;
+    const supabase = getSupabaseAdmin();
 
-    // 1. Busca dados do casal para saber os nomes
-    const { data: couple, error: coupleError } = await supabase
-      .from('couples')
-      .select('partner1_name, partner2_name')
-      .eq('id', coupleId)
-      .single();
-
-    if (coupleError) {
-      return NextResponse.json({ error: 'Erro ao buscar dados do casal' }, { status: 500 });
-    }
-
-    // 2. Busca o histórico de fechamentos
-    const { data: history, error: historyError } = await supabase
+    // Busca fechamentos concluídos (status = COMPLETED)
+    const { data: settlements, error } = await supabase
       .from('settlements')
       .select('*')
-      .eq('couple_id', coupleId)
+      .eq('couple_id', session.coupleId)
+      .eq('status', 'COMPLETED')
       .order('created_at', { ascending: false });
 
-    if (historyError) {
+    if (error) {
+      console.error('Erro ao buscar histórico:', error);
       return NextResponse.json({ error: 'Erro ao buscar histórico' }, { status: 500 });
     }
 
-    // 3. Formata os dados adicionando os nomes legíveis
-    // Assume que no banco 'paid_by' é salvo como 'partner_1' ou 'partner_2'
-    const formattedHistory = history.map((item) => {
-      const payerName = item.paid_by === 'partner_1' 
-        ? couple.partner1_name 
-        : couple.partner2_name;
-        
-      const receiverName = item.received_by === 'partner_1' 
-        ? couple.partner1_name 
-        : couple.partner2_name;
+    // Busca nomes dos usuários para exibir quem pagou/recebeu
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, name')
+      .eq('couple_id', session.coupleId);
 
+    const history = settlements.map((s) => {
+      const payer = users?.find((u) => u.id === s.paid_by);
+      const receiver = users?.find((u) => u.id === s.received_by);
       return {
-        ...item,
-        payer_name: payerName || 'Parceiro',
-        receiver_name: receiverName || 'Você',
+        id: s.id,
+        amount_settled: s.amount_settled,
+        paid_by: s.paid_by,
+        received_by: s.received_by,
+        month_reference: s.month_reference,
+        created_at: s.created_at,
+        payer_name: payer?.name || 'Parceiro',
+        receiver_name: receiver?.name || 'Você',
       };
     });
 
-    return NextResponse.json({ history: formattedHistory });
+    return NextResponse.json({ history });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 });
+    console.error('Erro interno ao buscar histórico:', error);
+    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
 }

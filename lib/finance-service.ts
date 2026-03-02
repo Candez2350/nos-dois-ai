@@ -208,6 +208,10 @@ export async function approveSettlement(settlementId: string, coupleId: string):
   const { data: settlement } = await supabase.from('settlements').select('*').eq('id', settlementId).single();
   if (!settlement) throw new Error('Solicitação não encontrada.');
 
+  if (settlement.status !== 'PENDING') {
+    throw new Error('Esta solicitação já foi processada.');
+  }
+
   if (settlement.couple_id !== coupleId) {
     throw new Error('Você não tem permissão para aprovar esta liquidação.');
   }
@@ -231,6 +235,10 @@ export async function rejectSettlement(settlementId: string, coupleId: string): 
 
   const { data: settlement } = await supabase.from('settlements').select('*').eq('id', settlementId).single();
   if (!settlement) throw new Error('Solicitação não encontrada.');
+
+  if (settlement.status !== 'PENDING') {
+    throw new Error('Esta solicitação já foi processada.');
+  }
 
   if (settlement.couple_id !== coupleId) {
     throw new Error('Você não tem permissão para rejeitar esta liquidação.');
