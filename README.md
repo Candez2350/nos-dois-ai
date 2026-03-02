@@ -1,34 +1,109 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
 
-# Run and deploy your AI Studio app
+const inter = Inter({ subsets: ["latin"] });
 
-This contains everything you need to run your app locally
+export const metadata: Metadata = {
+  title: "NósDois.ai",
+  description: "Assistente financeiro inteligente para casais.",
+};
 
-View your app in AI Studio: https://ai.studio/apps/dfff3623-3057-4e60-836e-714e4cc48dc7
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="pt-BR">
+      <body className={`${inter.className} antialiased`}>
+        {children}
+      </body>
+    </html>
+  );
+}
+# NósDois.ai 💑
 
-## Run Locally
+**Assistente financeiro inteligente para casais.**
 
-**Prerequisites:** Node.js
+O NósDois.ai é uma plataforma SaaS que elimina as discussões financeiras entre casais. O sistema permite o registro de gastos via chat (texto ou foto), utiliza IA para categorização e leitura de cupons, e gerencia o acerto de contas (fechamentos) de forma automática e justa.
 
-1. Install dependencies: `npm install`
-2. Configure [.env.local](.env.local) (copie de [.env.example](.env.example)):
-   - `GEMINI_API_KEY` – chave da API Gemini
-   - `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` – projeto Supabase
-   - **`SESSION_SECRET`** – obrigatório para o login (cookie assinado). Gere com: `openssl rand -hex 32`. Em produção (Vercel), defina em Settings → Environment Variables.
-3. Run the app: `npm run dev`
+## 🚀 Funcionalidades Atuais
 
-## Fluxo de uso (app)
+### 🌐 Institucional (Landing Page)
+- Página de alta conversão desenvolvida com **Framer Motion**.
+- Seções detalhadas: Hero, Problema/Solução, Recursos Técnicos, Preços e FAQ.
+- Design totalmente responsivo.
 
-- **Registro:** na landing, “Testar Grátis” → nome do casal + WhatsApp → gera **código do casal** (ex: ND-A1B2).
-- **Login:** em `/login` (ou “Já tenho conta”), informe o código, escolha “Parceiro 1” ou “Parceiro 2” e opcionalmente seu nome. O primeiro login de cada parceiro cria/atualiza o usuário na tabela `users` e associa ao casal.
-- **Chat:** em `/app/chat`, envie texto ou foto de recibo; a IA extrai valor/local/categoria e grava em `transactions` com `payer_user_id` (user do parceiro logado).
-- **Dashboard:** em `/app/dashboard`, veja saldo do mês e lista de gastos; use “Fechar período e liquidar” para gerar o acerto e registrar em `settlements` (exige os dois usuários do casal em `users`).
+### 📱 Aplicação (Área Logada)
+O layout da aplicação adapta-se automaticamente ao dispositivo:
+- **Desktop:** Sidebar lateral fixa.
+- **Mobile:** Bottom Navigation (barra inferior) estilo app nativo.
 
-O schema é **app-first**: usuários têm `role` (partner_1/partner_2), casais têm `partner_1_id`/`partner_2_id` (FK para users), e transações têm `payer_user_id` (FK para users). `payer_wa_number` é opcional (legado/WhatsApp).
+#### Módulos do Sistema:
+1.  **💬 Chat:** Interface principal para interação com a IA e registro de despesas.
+2.  **📊 Dashboard:** Visão geral dos saldos do mês e quem deve a quem.
+3.  **📜 Histórico (Novo):**
+    - Listagem completa de todos os fechamentos de contas anteriores.
+    - Detalhes de quem pagou, quem recebeu, valor liquidado e mês de referência.
+4.  **⚙️ Ajustes (Novo):**
+    - **Identidade:** Alteração do nome do casal.
+    - **Regra de Divisão:**
+        - *50/50:* Divisão igualitária.
+        - *Proporcional:* Divisão baseada na porcentagem de renda de cada um (ex: 60/40).
+    - **Inteligência Artificial:**
+        - *Personalidade:* Escolha entre uma IA "Descontraída 😄" ou "Formal 🧐".
+    - **Segurança:** Regra de negócio onde apenas o **Parceiro 1 (Assinante)** tem permissão para alterar configurações globais que afetam o cálculo.
 
-**Migrações (SQL Editor do Supabase):** execute na ordem:  
-1. [app_first_schema.sql](supabase/migrations/20260228100000_app_first_schema.sql)  
-2. [chat_messages.sql](supabase/migrations/20260228110000_chat_messages.sql) (histórico do chat)  
-3. [deletion_requests.sql](supabase/migrations/20260228120000_deletion_requests.sql) (exclusão com validação do parceiro)
+## 🛠️ Stack Tecnológica
+
+- **Frontend:** [Next.js 15](https://nextjs.org/) (App Router)
+- **Linguagem:** TypeScript
+- **Estilização:** Tailwind CSS
+- **Ícones:** Lucide React
+- **Backend / Database:** Supabase (PostgreSQL)
+- **Autenticação:** Gerenciamento de sessão via Cookies (`elo_session`).
+
+## 📂 Estrutura de Pastas Importantes
+
+```bash
+app/
+├── api/                    # Rotas de API (Backend Next.js)
+│   ├── auth/               # Login/Logout/Session
+│   ├── couples/settings/   # GET/PATCH configurações do casal
+│   └── dashboard/history/  # GET histórico de fechamentos
+├── app/                    # Área Logada (Protected Routes)
+│   ├── chat/               # Página de Chat
+│   ├── dashboard/          # Página de Dashboard
+│   ├── history/            # Página de Histórico
+│   ├── settings/           # Página de Configurações
+│   └── layout.tsx          # Layout com Sidebar/BottomNav
+├── layout.tsx              # Root Layout
+└── page.tsx                # Landing Page
+```
+
+## ⚙️ Configuração e Instalação
+
+1. **Clone o repositório:**
+   ```bash
+   git clone https://github.com/seu-usuario/elo-financeiro-2.git
+   ```
+
+2. **Instale as dependências:**
+   ```bash
+   npm install
+   # ou
+   yarn install
+   ```
+
+3. **Variáveis de Ambiente (.env.local):**
+   Certifique-se de configurar as chaves do Supabase:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=sua_url_supabase
+   SUPABASE_SERVICE_ROLE_KEY=sua_chave_service_role
+   ```
+
+4. **Rodar o projeto:**
+   ```bash
+   npm run dev
+   ```

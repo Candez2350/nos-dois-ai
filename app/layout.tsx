@@ -1,20 +1,22 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import AppNav from '@/components/AppNav';
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'NósDois.ai',
-  description: 'Finanças para casais',
+  title: "NósDois.ai",
+  description: "Assistente financeiro inteligente para casais.",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="pt-BR">
-      <body className={inter.className}>
-        <AppNav partnerName={''} />
+      <body className={`${inter.className} antialiased`}>
         {children}
       </body>
     </html>
