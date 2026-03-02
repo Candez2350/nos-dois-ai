@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   MessageCircle, 
   LayoutDashboard, 
@@ -16,6 +16,7 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   const menuItems = [
     { icon: MessageCircle, label: 'Chat', href: '/app/chat' },
@@ -23,6 +24,11 @@ export default function AppLayout({
     { icon: History, label: 'Histórico', href: '/app/history' },
     { icon: Settings, label: 'Ajustes', href: '/app/settings' },
   ];
+
+  async function handleLogout() {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    router.push('/login');
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -56,7 +62,10 @@ export default function AppLayout({
         </nav>
 
         <div className="p-4 border-t border-gray-100">
-          <button className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 transition-colors">
+          <button 
+            onClick={handleLogout}
+            className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
+          >
             <LogOut className="w-5 h-5" />
             Sair
           </button>

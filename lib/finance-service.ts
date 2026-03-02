@@ -175,12 +175,18 @@ export async function requestSettlement(
   const targetName = isP1Requester ? balance.p2Name : balance.p1Name;
   const requesterName = isP1Requester ? balance.p1Name : balance.p2Name;
 
+  let warning = '';
   if (targetPhone) {
-    const msg = `Olá ${targetName}! 💑\n\n${requesterName} solicitou o fechamento das contas de ${balance.periodRef}.\n\nValor do acerto: R$ ${balance.amountToTransfer.toFixed(2)}\nQuem paga: ${balance.payerName}\n\nAcesse o app para aprovar: https://nosdois.ai/app/dashboard`;
-    await sendWhatsAppMessage(msg, targetPhone);
+    try {
+      const msg = `Olá ${targetName}! 💑\n\n${requesterName} solicitou o fechamento das contas de ${balance.periodRef}.\n\nValor do acerto: R$ ${balance.amountToTransfer.toFixed(2)}\nQuem paga: ${balance.payerName}\n\nAcesse o app para aprovar: https://nosdois.ai/app/dashboard`;
+      await sendWhatsAppMessage(msg, targetPhone);
+    } catch (err) {
+      console.error('Erro ao enviar notificação de fechamento:', err);
+      warning = ' (Notificação de WhatsApp falhou, avise seu parceiro manualmente)';
+    }
   }
 
-  return { success: true, message: 'Solicitação enviada para aprovação!' };
+  return { success: true, message: `Solicitação enviada para aprovação!${warning}` };
 }
 
 /** Aprova o fechamento e atualiza as transações. */
