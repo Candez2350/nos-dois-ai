@@ -296,8 +296,7 @@ export default function DashboardPage() {
       if (res.ok) {
         setCloseResult({
           success: true,
-          message: data.closed ? 'Período fechado! Transações liquidadas.' : data.message,
-          settlement: data.settlement,
+          message: data.message,
         });
         setBalance(undefined);
         setLoadingBalance(true);
@@ -305,11 +304,8 @@ export default function DashboardPage() {
         const d = await r.json();
         if (r.ok) setBalance(d.balance ?? null);
         
-        // Atualiza estado da solicitação pendente
-        if (data.settlement) {
-           // Força um refresh simples recarregando a página ou atualizando o estado local
-           window.location.reload(); 
-        }
+        // Atualiza as solicitações para mostrar o banner de "Aguardando aprovação"
+        fetchRequests();
       } else {
         setCloseResult({ success: false, message: data.error || 'Erro ao fechar.' });
       }
