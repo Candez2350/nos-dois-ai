@@ -1,31 +1,68 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { User, Mail, Phone, CreditCard, Calendar, Loader2 } from 'lucide-react';
+import { Loader2, Save, Users, Percent, Lock, LogOut } from 'lucide-react';
+import Link from 'next/link';
 
-interface UserProfile {
-  id: string;
-  name: string;
-  email: string | null;
-  whatsapp_number: string;
-  pix_key: string | null;
-  role: string;
-  created_at: string;
-}
-
-export default function ProfilePage() {
-  const [user, setUser] = useState<UserProfile | null>(null);
+export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [session, setSession] = useState<any>(null);
+  const [form, setForm] = useState({
+    name: '',
+    split_type: 'EQUAL',
+    split_percentage_partner_1: 50,
+    split_percentage_partner_2: 50,
+  });
 
   useEffect(() => {
-    fetch('/api/users/profile')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.user) setUser(data.user);
-      })
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
+    async function fetchData() {
+      try {
+        const [settRes, sessRes] = await Promise.all([
+          fetch('/api/couples/settings'),
+          fetch('/api/auth/session')
+        ]);
+        const settData = await settRes.json();
+        const sessData = await sessRes.json();
+        
+        if (settData.couple) {
+          setForm({
+            name: settData.couple.name || '',
+            split_type: settData.couple.split_type || 'EQUAL',
+            split_percentage_partner_1: settData.couple.split_percentage_partner_1 || 50,
+            split_percentage_partner_2: settData.couple.split_percentage_partner_2 || 50,
+          });
+        }
+        setSession(sessData);
+      } catch (error) {
+        console.error('Erro ao carregar configurações:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
   }, []);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/couples/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        alert('Configurações salvas com sucesso!');
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Erro ao salvar.');
+      }
+    } catch {
+      alert('Erro de conexão.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -35,72 +72,134 @@ export default function ProfilePage() {
     );
   }
 
-  if (!user) {
-    return (
-      <div className="p-8 text-center text-gray-500">
-        Não foi possível carregar o perfil.
-      </div>
-    );
-  }
+  const isP1 = session?.role === 'partner_1';
 
   return (
-    <div className="max-w-2xl mx-auto p-4">
-      <h1 className="text-2xl font-bold text-[#1C1C1C] mb-2">Meu Perfil</h1>
-      <p className="text-gray-500 mb-8">Visualize seus dados pessoais cadastrados.</p>
+    <div className="max-w-2xl mx-auto p-4 pb-12">
+      <h1 className="text-2xl font-bold text-[#1C1C1C] mb-6">Configurações do Casal</h1>
 
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="bg-[#25D366]/10 p-8 flex flex-col items-center justify-center border-b border-[#25D366]/10">
-          <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm text-[#25D366]">
-            <User className="w-10 h-10" />
-          </div>
-          <h2 className="text-xl font-bold text-[#1C1C1C]">{user.name}</h2>
-          <span className="text-sm font-medium text-[#25D366] bg-white/50 px-3 py-1 rounded-full mt-2">
-            {user.role === 'partner_1' ? 'Parceiro 1 (Admin)' : 'Parceiro 2'}
-          </span>
+      {!isP1 && (
+        <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl mb-6 flex items-start gap-3">
+          <Lock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-800">
+            Apenas o <strong>Parceiro 1 (quem criou a conta)</strong> pode alterar as configurações globais do casal.
+          </p>
         </div>
+      )}
 
-        <div className="p-6 space-y-6">
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-gray-400 shrink-0">
-              <Phone className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">WhatsApp</p>
-              <p className="text-[#1C1C1C] font-medium">{user.whatsapp_number}</p>
-            </div>
+      <div className="space-y-6">
+        <section className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Users className="w-5 h-5 text-[#25D366]" />
+            <h2 className="font-bold text-gray-800">Identidade</h2>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Casal</label>
+            <input
+              disabled={!isP1}
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full p-3 rounded-xl border border-gray-200 focus:border-[#25D366] outline-none disabled:bg-gray-50 disabled:text-gray-500"
+            />
+          </div>
+        </section>
 
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-gray-400 shrink-0">
-              <Mail className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Email</p>
-              <p className="text-[#1C1C1C] font-medium">{user.email || 'Não cadastrado'}</p>
-            </div>
+        <section className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Percent className="w-5 h-5 text-[#25D366]" />
+            <h2 className="font-bold text-gray-800">Divisão de Contas</h2>
           </div>
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                disabled={!isP1}
+                onClick={() => setForm({ ...form, split_type: 'EQUAL' })}
+                className={`p-4 rounded-2xl border-2 transition-all text-left ${
+                  form.split_type === 'EQUAL'
+                    ? 'border-[#25D366] bg-[#25D366]/5'
+                    : 'border-gray-100 hover:border-gray-200'
+                } disabled:opacity-60`}
+              >
+                <span className="block font-bold text-gray-800">50% / 50%</span>
+                <span className="text-xs text-gray-500">Divisão igualitária</span>
+              </button>
+              <button
+                disabled={!isP1}
+                onClick={() => setForm({ ...form, split_type: 'PROPORTIONAL' })}
+                className={`p-4 rounded-2xl border-2 transition-all text-left ${
+                  form.split_type === 'PROPORTIONAL'
+                    ? 'border-[#25D366] bg-[#25D366]/5'
+                    : 'border-gray-100 hover:border-gray-200'
+                } disabled:opacity-60`}
+              >
+                <span className="block font-bold text-gray-800">Proporcional</span>
+                <span className="text-xs text-gray-500">Baseada na renda</span>
+              </button>
+            </div>
 
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-gray-400 shrink-0">
-              <CreditCard className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Chave PIX</p>
-              <p className="text-[#1C1C1C] font-medium">{user.pix_key || 'Não cadastrada'}</p>
-            </div>
+            {form.split_type === 'PROPORTIONAL' && (
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Parceiro 1 (%)</label>
+                  <input
+                    disabled={!isP1}
+                    type="number"
+                    value={form.split_percentage_partner_1}
+                    onChange={(e) => {
+                      const v = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                      setForm({
+                        ...form,
+                        split_percentage_partner_1: v,
+                        split_percentage_partner_2: 100 - v,
+                      });
+                    }}
+                    className="w-full p-3 rounded-xl border border-gray-200 focus:border-[#25D366] outline-none disabled:bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Parceiro 2 (%)</label>
+                  <input
+                    disabled={!isP1}
+                    type="number"
+                    value={form.split_percentage_partner_2}
+                    onChange={(e) => {
+                      const v = Math.min(100, Math.max(0, parseInt(e.target.value) || 0));
+                      setForm({
+                        ...form,
+                        split_percentage_partner_2: v,
+                        split_percentage_partner_1: 100 - v,
+                      });
+                    }}
+                    className="w-full p-3 rounded-xl border border-gray-200 focus:border-[#25D366] outline-none disabled:bg-gray-50"
+                  />
+                </div>
+              </div>
+            )}
           </div>
+        </section>
 
-          <div className="flex items-center gap-4 p-4 rounded-2xl bg-gray-50 border border-gray-100">
-            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-gray-400 shrink-0">
-              <Calendar className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Membro desde</p>
-              <p className="text-[#1C1C1C] font-medium">
-                {new Date(user.created_at).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })}
-              </p>
-            </div>
-          </div>
+        {isP1 && (
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full py-4 bg-[#25D366] text-white font-bold rounded-2xl hover:bg-[#20bd5a] shadow-lg shadow-[#25D366]/20 transition-all flex items-center justify-center gap-2"
+          >
+            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+            Salvar Configurações
+          </button>
+        )}
+
+        {/* Botão de Sair (Apenas Mobile) */}
+        <div className="md:hidden pt-6 border-t border-gray-200 mt-8">
+          <Link 
+            href="/api/auth/logout"
+            className="flex items-center justify-center gap-2 w-full p-4 text-red-500 font-bold bg-red-50 rounded-2xl hover:bg-red-100 transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+            Sair da conta
+          </Link>
         </div>
       </div>
     </div>
