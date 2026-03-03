@@ -1,5 +1,4 @@
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
-import { sendWhatsAppMessage } from '@/lib/evolution-api';
 
 export type BalanceResult = {
   totalGeral: number;
@@ -14,8 +13,6 @@ export type BalanceResult = {
   splitType: string;
   p1Id: string;
   p2Id: string;
-  p1Phone: string;
-  p2Phone: string;
   payerId: string | null;
   receiverId: string | null;
 };
@@ -40,22 +37,20 @@ async function getBalanceInternal(
 
   const { data: users } = await supabase
     .from('users')
-    .select('id, name, whatsapp_number')
+    .select('id, name')
     .eq('couple_id', coupleId);
 
   const p1User =
-    users?.find((u) => u.id === partner1Id) ??
-    users?.find((u) => u.whatsapp_number === couple.p1_wa_number);
+    users?.find((u) => u.id === partner1Id);
   const p2User =
-    users?.find((u) => u.id === partner2Id) ??
-    users?.find((u) => u.whatsapp_number === couple.p2_wa_number);
+    users?.find((u) => u.id === partner2Id);
 
   const p1Name = p1User?.name ?? 'Parceiro 1';
   const p2Name = p2User?.name ?? 'Parceiro 2';
 
   const { data: transactions, error: txError } = await supabase
     .from('transactions')
-    .select('id, amount, payer_user_id, payer_wa_number')
+    .select('id, amount, payer_user_id')
     .eq('couple_id', coupleId)
     .is('settlement_id', null)
     .gte('expense_date', startDate)
@@ -65,12 +60,8 @@ async function getBalanceInternal(
     return null;
   }
 
-  const isP1 = (t: { payer_user_id?: string | null; payer_wa_number?: string | null }) =>
-    (t.payer_user_id && t.payer_user_id === partner1Id) ||
-    (!t.payer_user_id && t.payer_wa_number === couple.p1_wa_number);
-  const isP2 = (t: { payer_user_id?: string | null; payer_wa_number?: string | null }) =>
-    (t.payer_user_id && t.payer_user_id === partner2Id) ||
-    (!t.payer_user_id && t.payer_wa_number === couple.p2_wa_number);
+  const isP1 = (t: { payer_user_id?: string | null;}) => t.payer_user_id && t.payer_user_id === partner1Id;
+  const isP2 = (t: { payer_user_id?: string | null;}) => t.payer_user_id && t.payer_user_id === partner2Id;
 
   const totalP1 =
     transactions?.filter(isP1).reduce((sum, t) => sum + Number(t.amount), 0) || 0;
@@ -126,8 +117,6 @@ async function getBalanceInternal(
     splitType: couple.split_type,
     p1Id: p1User?.id ?? '',
     p2Id: p2User?.id ?? '',
-    p1Phone: p1User?.whatsapp_number ?? '',
-    p2Phone: p2User?.whatsapp_number ?? '',
     payerId,
     receiverId,
   };
@@ -182,24 +171,9 @@ export async function requestSettlement(
 
   if (error) throw new Error(`Erro ao criar solicitação: ${error.message}`);
 
-  // Notifica o outro parceiro
-  const isP1Requester = requesterId === balance.p1Id;
-  const targetPhone = isP1Requester ? balance.p2Phone : balance.p1Phone;
-  const targetName = isP1Requester ? balance.p2Name : balance.p1Name;
-  const requesterName = isP1Requester ? balance.p1Name : balance.p2Name;
+  // Notifica o outro parceiro - REMOVIDO
 
-  let warning = '';
-  if (targetPhone) {
-    try {
-      const msg = `Olá ${targetName}! 💑\n\n${requesterName} solicitou o fechamento das contas de ${balance.periodRef}.\n\nValor do acerto: R$ ${balance.amountToTransfer.toFixed(2)}\nQuem paga: ${balance.payerName}\n\nAcesse o app para aprovar: https://nosdois.ai/app/dashboard`;
-      await sendWhatsAppMessage(msg, targetPhone);
-    } catch (err) {
-      console.error('Erro ao enviar notificação de fechamento:', err);
-      warning = ' (Notificação de WhatsApp falhou, avise seu parceiro manualmente)';
-    }
-  }
-
-  return { success: true, message: `Solicitação enviada para aprovação!${warning}` };
+  return { success: true, message: `Solicitação enviada para aprovação!` };
 }
 
 /** Aprova o fechamento e atualiza as transações. */
@@ -236,15 +210,7 @@ export async function approveSettlement(settlementId: string, coupleId: string):
 
   if (settleError) throw new Error(`Erro ao finalizar fechamento: ${settleError.message}`);
 
-  // Notifica quem solicitou
-  if (settlement.requested_by) {
-    const { data: requester } = await supabase.from('users').select('whatsapp_number, name').eq('id', settlement.requested_by).single();
-    if (requester?.whatsapp_number) {
-      try {
-        await sendWhatsAppMessage(`Olá ${requester.name}! ✅\n\nO fechamento de contas foi APROVADO pelo seu parceiro(a). 🎉\n\nAs despesas foram liquidadas e o histórico atualizado.`, requester.whatsapp_number);
-      } catch (e) { console.error('Erro zap aprovação', e); }
-    }
-  }
+  // Notifica quem solicitou - REMOVIDO
 }
 
 /** Rejeita o fechamento. */
@@ -270,13 +236,5 @@ export async function rejectSettlement(settlementId: string, coupleId: string): 
 
   if (error) throw new Error(`Erro ao rejeitar: ${error.message}`);
 
-  // Notifica quem solicitou
-  if (settlement.requested_by) {
-    const { data: requester } = await supabase.from('users').select('whatsapp_number, name').eq('id', settlement.requested_by).single();
-    if (requester?.whatsapp_number) {
-      try {
-        await sendWhatsAppMessage(`Olá ${requester.name}. ⚠️\n\nO fechamento de contas foi REJEITADO pelo seu parceiro(a).\n\nVerifique as despesas e tente novamente.`, requester.whatsapp_number);
-      } catch (e) { console.error('Erro zap rejeição', e); }
-    }
-  }
+  // Notifica quem solicitou - REMOVIDO
 }
