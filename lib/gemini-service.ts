@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getSupabaseAdmin } from './supabase-admin';
 
 let genAI: GoogleGenerativeAI | null = null;
 
@@ -20,9 +21,29 @@ export interface ExpenseData {
   data_identificada: boolean;
 }
 
-export async function analyzeExpense(input: { text?: string; imageBase64?: string }): Promise<ExpenseData> {
+export async function analyzeExpense(
+  input: { text?: string; imageBase64?: string },
+  coupleId: string
+): Promise<ExpenseData> {
   try {
     const client = getGenAIClient();
+    const supabase = getSupabaseAdmin();
+
+    // Fetch custom categories for the couple
+    const { data: categories, error: categoriesError } = await supabase
+      .from('custom_categories')
+      .select('name')
+      .eq('couple_id', coupleId);
+
+    if (categoriesError) {
+      console.error("Erro ao buscar categorias:", categoriesError.message);
+      // Fallback to default categories if there's an error
+    }
+    
+    const categoryList = categories && categories.length > 0 
+      ? categories.map(c => `- ${c.name}`).join('\n   ') 
+      : `- Alimentação\n   - Transporte\n   - Casa\n   - Saúde\n   - Lazer\n   - Vestuário\n   - Compras\n   - Outros`;
+
 
     const model = client.getGenerativeModel({
       model: "gemini-2.5-flash",
@@ -55,15 +76,8 @@ Você é o Duetto, um especialista financeiro para casais. Sua missão é extrai
    - Imagem: Procure a data de emissão. Formatos: DD/MM/AAAA, AAAA-MM-DD, DD-MM-YY.
    - Se a data não for encontrada ou for ambígua, use a data de hoje e marque "data_identificada": false.
 
-4. **Categorização Inteligente** (Escolha UMA):
-   - **Alimentação**: Mercado, Restaurante, Ifood, Padaria, Açougue, Feira.
-   - **Transporte**: Uber, Táxi, Gasolina, Combustível, Estacionamento, Pedágio, Mecânico.
-   - **Casa**: Aluguel, Condomínio, Luz, Água, Internet, Gás, Reforma, Móveis, Utensílios.
-   - **Saúde**: Farmácia, Médico, Dentista, Exames, Academia, Terapia.
-   - **Lazer**: Cinema, Bar, Show, Viagem, Hotel, Streaming (Netflix/Spotify), Jogos.
-   - **Vestuário**: Roupas, Sapatos, Acessórios, Joias.
-   - **Compras**: Eletrônicos, Presentes, Cosméticos, Livros, Outros bens duráveis.
-   - **Outros**: Saques, Taxas bancárias, Doações, ou o que não se encaixar acima.
+4. **Categorização Inteligente** (Escolha UMA das categorias abaixo):
+   ${categoryList}
 
 5. **Descrição (Tipo)**:
    - Resuma o que foi gasto em 1 ou 2 palavras para complementar o local.
@@ -129,7 +143,7 @@ Output: { "valor": 25, "local": "Uber", "tipo": "Corrida", "categoria": "Transpo
     if (typeof parsed.valor === 'string') {
       valorNumerico = parseFloat(
         parsed.valor
-          .replace('R$', '')
+          .replace('R, '')
           .replace(/\./g, '')
           .replace(',', '.')
           .trim()

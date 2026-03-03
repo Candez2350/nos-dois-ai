@@ -18,6 +18,7 @@ import {
   Clock,
 } from 'lucide-react';
 import SettlementRequestCard from '@/components/SettlementRequestCard';
+import BudgetProgressList from '@/components/BudgetProgressList';
 
 const CATEGORIAS = ['Alimentação', 'Lazer', 'Transporte', 'Casa', 'Saúde', 'Vestuário', 'Compras', 'Outros'];
 
@@ -426,6 +427,9 @@ export default function DashboardPage() {
           <p className="text-white/70 py-4">Nenhuma despesa no período.</p>
         )}
       </section>
+
+      {/* Orçamentos do Mês */}
+      <BudgetProgressList />
 
       {/* Solicitações de exclusão pendentes */}
       {deletionRequests.length > 0 && (

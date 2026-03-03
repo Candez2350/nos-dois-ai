@@ -17,19 +17,22 @@ O layout da aplicação adapta-se automaticamente ao dispositivo:
 - **Mobile:** Bottom Navigation (barra inferior) estilo app nativo.
 
 #### Módulos do Sistema:
-1.  **💬 Chat:** Interface principal para interação com a IA e registro de despesas.
-2.  **📊 Dashboard:** Visão geral dos saldos do mês e quem deve a quem.
-3.  **📜 Histórico (Novo):**
-    - Listagem completa de todos os fechamentos de contas anteriores.
-    - Detalhes de quem pagou, quem recebeu, valor liquidado e mês de referência.
-4.  **⚙️ Ajustes (Novo):**
+1.  **💬 Chat:** Interface principal para interação com a IA. Registre despesas via texto ou enviando uma foto do recibo. A IA extrai, categoriza e salva a despesa automaticamente.
+
+2.  **📊 Dashboard:**
+    - Visão geral dos saldos do mês, incluindo total gasto, gastos individuais e o valor do acerto de contas.
+    - **Orçamentos:** Defina metas de gastos por categoria e acompanhe o progresso com barras visuais que mudam de cor (verde/amarelo/vermelho) conforme você se aproxima do limite.
+
+3.  **📜 Histórico:**
+    - Listagem completa de todos os fechamentos de contas (acertos) anteriores.
+    - Detalhes de quem pagou, quem recebeu, valor e mês de referência.
+
+4.  **⚙️ Ajustes:**
     - **Identidade:** Alteração do nome do casal.
-    - **Regra de Divisão:**
-        - *50/50:* Divisão igualitária.
-        - *Proporcional:* Divisão baseada na porcentagem de renda de cada um (ex: 60/40).
-    - **Inteligência Artificial:**
-        - *Personalidade:* Escolha entre uma IA "Descontraída 😄" ou "Formal 🧐".
-    - **Segurança:** Regra de negócio onde apenas o **Parceiro 1 (Assinante)** tem permissão para alterar configurações globais que afetam o cálculo.
+    - **Regra de Divisão:** Escolha entre divisão igualitária (50/50) ou proporcional à renda.
+    - **Despesas Recorrentes (Automação):** Gerencie contas fixas e assinaturas (ex: Aluguel, Netflix). O sistema as lançará automaticamente todo mês no dia definido.
+    - **Categorias Personalizadas:** Crie, edite e remova suas próprias categorias. A IA aprende e passa a usar suas categorias para classificar novos gastos.
+    - **Segurança:** Apenas o **Parceiro 1 (Assinante)** pode alterar configurações globais que afetam cálculos financeiros.
 
 ## 📄 Documentação
 

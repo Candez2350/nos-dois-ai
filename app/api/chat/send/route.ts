@@ -22,10 +22,34 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
+    // 1. Call analyzeExpense with the coupleId
     const expense = await analyzeExpense(
-      imageBase64 ? { imageBase64 } : { text: String(text).trim() }
+      imageBase64 ? { imageBase64 } : { text: String(text).trim() },
+      session.coupleId
     );
 
+    // 2. Resolve category name to category_id
+    let { data: categoryRow } = await supabase
+      .from('custom_categories')
+      .select('id')
+      .eq('couple_id', session.coupleId)
+      .ilike('name', expense.categoria) // Case-insensitive match
+      .single();
+
+    // If AI returns a category not in the user's list, fallback to 'Outros'
+    if (!categoryRow) {
+      const { data: fallbackCategory } = await supabase
+        .from('custom_categories')
+        .select('id')
+        .eq('couple_id', session.coupleId)
+        .ilike('name', 'Outros')
+        .single();
+      categoryRow = fallbackCategory;
+    }
+    
+    const categoryId = categoryRow?.id; // The UUID for the category
+
+    // 3. Insert transaction with the resolved category_id
     const { data: txRow, error: txError } = await supabase
       .from('transactions')
       .insert({
@@ -33,7 +57,7 @@ export async function POST(req: NextRequest) {
         payer_user_id: session.userId,
         amount: expense.valor,
         description: expense.local,
-        category: expense.categoria,
+        category_id: categoryId, // Use the resolved UUID
         expense_date: expense.data,
         ai_metadata: {
           source: imageBase64 ? 'ocr' : 'text',
