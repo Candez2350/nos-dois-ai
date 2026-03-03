@@ -76,42 +76,44 @@ export default function DashboardPage() {
   } | null>(null);
   const [session, setSession] = useState<{ coupleId: string } | null>(null);
 
-  useEffect(() => {
-    async function fetchBalance() {
-      setLoadingBalance(true);
-      try {
-        const res = await fetch(`/api/dashboard/balance?month=${monthParam}`);
-        const data = await res.json();
-        if (res.ok) setBalance(data.balance ?? null);
-        else setBalance(null);
-      } catch {
-        setBalance(null);
-      } finally {
-        setLoadingBalance(false);
-      }
+  const fetchBalance = useCallback(async () => {
+    setLoadingBalance(true);
+    try {
+      const res = await fetch(`/api/dashboard/balance?month=${monthParam}`);
+      const data = await res.json();
+      if (res.ok) setBalance(data.balance ?? null);
+      else setBalance(null);
+    } catch {
+      setBalance(null);
+    } finally {
+      setLoadingBalance(false);
     }
-    fetchBalance();
+  }, [monthParam]);
+
+  const fetchExpenses = useCallback(async () => {
+    setLoadingExpenses(true);
+    try {
+      const [y, m] = monthParam.split('-').map(Number);
+      const start = `${monthParam}-01`;
+      const end = `${y}-${String(m).padStart(2, '0')}-${new Date(y, m, 0).getDate()}`;
+      const res = await fetch(`/api/dashboard/expenses?start=${start}&end=${end}`);
+      const data = await res.json();
+      if (res.ok) setExpenses(data.expenses ?? []);
+      else setExpenses([]);
+    } catch {
+      setExpenses([]);
+    } finally {
+      setLoadingExpenses(false);
+    }
   }, [monthParam]);
 
   useEffect(() => {
-    async function fetchExpenses() {
-      setLoadingExpenses(true);
-      try {
-        const [y, m] = monthParam.split('-').map(Number);
-        const start = `${monthParam}-01`;
-        const end = `${y}-${String(m).padStart(2, '0')}-${new Date(y, m, 0).getDate()}`;
-        const res = await fetch(`/api/dashboard/expenses?start=${start}&end=${end}`);
-        const data = await res.json();
-        if (res.ok) setExpenses(data.expenses ?? []);
-        else setExpenses([]);
-      } catch {
-        setExpenses([]);
-      } finally {
-        setLoadingExpenses(false);
-      }
-    }
+    fetchBalance();
+  }, [fetchBalance]);
+
+  useEffect(() => {
     fetchExpenses();
-  }, [monthParam]);
+  }, [fetchExpenses]);
 
   const fetchRequests = useCallback(() => {
     setLoadingRequests(true);
@@ -229,22 +231,13 @@ export default function DashboardPage() {
       const data = await res.json();
       if (res.ok) {
         setDeletionRequests((prev) => prev.filter((r) => r.id !== requestId));
-        const [y, m] = monthParam.split('-').map(Number);
-        const start = `${monthParam}-01`;
-        const end = `${y}-${String(m).padStart(2, '0')}-${new Date(y, m, 0).getDate()}`;
-        const r = await fetch(`/api/dashboard/expenses?start=${start}&end=${end}`);
-        const d = await r.json();
-        if (r.ok) setExpenses(d.expenses ?? []);
-        setBalance(undefined);
-        setLoadingBalance(true);
-        const br = await fetch(`/api/dashboard/balance?month=${monthParam}`);
-        const bd = await br.json();
-        if (br.ok) setBalance(bd.balance ?? null);
+        if (action === 'approve') {
+          fetchExpenses();
+          fetchBalance();
+        }
       } else alert(data.error || 'Erro.');
     } catch {
       alert('Erro ao responder.');
-    } finally {
-      setLoadingBalance(false);
     }
   }
 
@@ -259,24 +252,12 @@ export default function DashboardPage() {
       if (res.ok) {
         setAdjustmentRequests((prev) => prev.filter((r) => r.id !== requestId));
         if (action === 'approve') {
-          // Recarregar despesas e saldo
-          const [y, m] = monthParam.split('-').map(Number);
-          const start = `${monthParam}-01`;
-          const end = `${y}-${String(m).padStart(2, '0')}-${new Date(y, m, 0).getDate()}`;
-          const r = await fetch(`/api/dashboard/expenses?start=${start}&end=${end}`);
-          const d = await r.json();
-          if (r.ok) setExpenses(d.expenses ?? []);
-          setBalance(undefined);
-          setLoadingBalance(true);
-          const br = await fetch(`/api/dashboard/balance?month=${monthParam}`);
-          const bd = await br.json();
-          if (br.ok) setBalance(bd.balance ?? null);
+          fetchExpenses();
+          fetchBalance();
         }
       } else alert(data.error || 'Erro.');
     } catch {
       alert('Erro ao responder.');
-    } finally {
-      setLoadingBalance(false);
     }
   }
 
@@ -298,13 +279,7 @@ export default function DashboardPage() {
           success: true,
           message: data.message,
         });
-        setBalance(undefined);
-        setLoadingBalance(true);
-        const r = await fetch(`/api/dashboard/balance?month=${monthParam}`);
-        const d = await r.json();
-        if (r.ok) setBalance(d.balance ?? null);
-        
-        // Atualiza as solicitações para mostrar o banner de "Aguardando aprovação"
+        fetchBalance();
         fetchRequests();
       } else {
         setCloseResult({ success: false, message: data.error || 'Erro ao fechar.' });

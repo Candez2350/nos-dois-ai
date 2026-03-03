@@ -1,27 +1,3 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"] });
-
-export const metadata: Metadata = {
-  title: "NósDois.ai",
-  description: "Assistente financeiro inteligente para casais.",
-};
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  return (
-    <html lang="pt-BR">
-      <body className={`${inter.className} antialiased`}>
-        {children}
-      </body>
-    </html>
-  );
-}
 # NósDois.ai 💑
 
 **Assistente financeiro inteligente para casais.**
@@ -55,6 +31,13 @@ O layout da aplicação adapta-se automaticamente ao dispositivo:
         - *Personalidade:* Escolha entre uma IA "Descontraída 😄" ou "Formal 🧐".
     - **Segurança:** Regra de negócio onde apenas o **Parceiro 1 (Assinante)** tem permissão para alterar configurações globais que afetam o cálculo.
 
+## 📄 Documentação
+
+Para mais detalhes sobre a arquitetura e o andamento do projeto, consulte os seguintes arquivos:
+
+-   **[`arquitetura.md`](./arquitetura.md):** Descreve a arquitetura técnica completa do sistema.
+-   **[`Diario.md`](./Diario.md):** Um diário de bordo com o registro das alterações e novas funcionalidades implementadas.
+
 ## 🛠️ Stack Tecnológica
 
 - **Frontend:** [Next.js 15](https://nextjs.org/) (App Router)
@@ -63,6 +46,7 @@ O layout da aplicação adapta-se automaticamente ao dispositivo:
 - **Ícones:** Lucide React
 - **Backend / Database:** Supabase (PostgreSQL)
 - **Autenticação:** Gerenciamento de sessão via Cookies (`elo_session`).
+- **Inteligência Artificial:** Google Gemini para análise de despesas.
 
 ## 📂 Estrutura de Pastas Importantes
 
@@ -72,7 +56,7 @@ app/
 │   ├── auth/               # Login/Logout/Session
 │   ├── couples/settings/   # GET/PATCH configurações do casal
 │   └── dashboard/history/  # GET histórico de fechamentos
-├── app/                    # Área Logada (Protected Routes)
+├── (protected)/            # Área Logada (Protected Routes)
 │   ├── chat/               # Página de Chat
 │   ├── dashboard/          # Página de Dashboard
 │   ├── history/            # Página de Histórico
@@ -97,10 +81,11 @@ app/
    ```
 
 3. **Variáveis de Ambiente (.env.local):**
-   Certifique-se de configurar as chaves do Supabase:
+   Crie um arquivo `.env.local` na raiz do projeto e adicione as chaves do Supabase e da API do Gemini:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=sua_url_supabase
    SUPABASE_SERVICE_ROLE_KEY=sua_chave_service_role
+   GEMINI_API_KEY=sua_chave_da_api_do_gemini
    ```
 
 4. **Rodar o projeto:**
