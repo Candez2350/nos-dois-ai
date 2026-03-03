@@ -15,6 +15,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Datas obrigatórias' }, { status: 400 });
     }
 
+    console.log(`[API close-period] Iniciando solicitação para coupleId: ${session.coupleId}`);
+    console.log(`[API close-period] Período: ${startDate} a ${endDate}`);
+
     // Chama a nova função de solicitação (requer aprovação)
     const result = await requestSettlement(
       session.coupleId,
@@ -22,6 +25,8 @@ export async function POST(request: Request) {
       endDate,
       session.userId // Identifica quem pediu para notificar o outro
     );
+
+    console.log('[API close-period] Resultado da operação:', result);
 
     return NextResponse.json(result);
   } catch (error: any) {

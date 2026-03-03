@@ -11,13 +11,23 @@ export async function GET() {
 
     const supabase = getSupabaseAdmin();
     
+    console.log(`[API settlement-requests] Buscando solicitação PENDING para coupleId: ${session.coupleId}`);
+
     // Busca solicitação pendente para o casal
-    const { data: request } = await supabase
+    const { data: request, error } = await supabase
       .from('settlements')
       .select('*')
       .eq('couple_id', session.coupleId)
       .eq('status', 'PENDING')
       .maybeSingle();
+
+    if (error) {
+      console.error('[API settlement-requests] Erro na query do Supabase:', error);
+      // Ainda assim, não vamos travar a aplicação, vamos retornar nulo.
+      return NextResponse.json({ request: null, error: 'Erro de banco de dados.' });
+    }
+
+    console.log('[API settlement-requests] Resultado da query:', request);
 
     if (!request) {
       return NextResponse.json({ request: null });
