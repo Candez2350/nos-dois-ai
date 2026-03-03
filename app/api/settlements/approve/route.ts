@@ -12,16 +12,16 @@ export async function POST(request: Request) {
     const { settlementId } = await request.json();
 
     if (!settlementId) {
-      return NextResponse.json({ error: 'ID da liquidação é obrigatório' }, { status: 400 });
+      return NextResponse.json({ error: 'ID da solicitação é obrigatório' }, { status: 400 });
     }
 
     await approveSettlement(settlementId, session.coupleId);
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ message: 'Fechamento aprovado com sucesso!' });
   } catch (error: any) {
-    console.error('Erro ao aprovar liquidação:', error);
+    console.error('Erro ao aprovar fechamento:', error);
     return NextResponse.json(
-      { error: error.message || 'Erro interno ao aprovar liquidação' },
+      { error: error.message || 'Erro interno ao processar a aprovação' },
       { status: 500 }
     );
   }
