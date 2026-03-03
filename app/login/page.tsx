@@ -38,7 +38,7 @@ function LoginForm() {
         setError(data.error || 'Erro ao entrar.');
         return;
       }
-      router.push('/app/chat');
+      router.push('/chat');
       router.refresh();
     } catch {
       setError('Erro de conexão. Tente de novo.');
