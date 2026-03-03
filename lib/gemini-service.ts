@@ -143,7 +143,7 @@ Output: { "valor": 25, "local": "Uber", "tipo": "Corrida", "categoria": "Transpo
     if (typeof parsed.valor === 'string') {
       valorNumerico = parseFloat(
         parsed.valor
-          .replace('R, '')
+          .replace(/R\$?\s*/, '')
           .replace(/\./g, '')
           .replace(',', '.')
           .trim()
