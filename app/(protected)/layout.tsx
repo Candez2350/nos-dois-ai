@@ -20,11 +20,11 @@ export default function AppLayout({
   const router = useRouter();
 
   const menuItems = [
-    { icon: MessageCircle, label: 'Chat', href: '/app/chat' },
-    { icon: LayoutDashboard, label: 'Dashboard', href: '/app/dashboard' },
-    { icon: History, label: 'Histórico', href: '/app/history' },
-    { icon: User, label: 'Perfil', href: '/app/profile' },
-    { icon: Settings, label: 'Ajustes', href: '/app/settings' },
+    { icon: MessageCircle, label: 'Chat', href: '/chat' },
+    { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
+    { icon: History, label: 'Histórico', href: '/history' },
+    { icon: User, label: 'Perfil', href: '/profile' },
+    { icon: Settings, label: 'Ajustes', href: '/settings' },
   ];
 
   async function handleLogout() {
