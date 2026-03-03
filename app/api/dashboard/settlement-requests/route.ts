@@ -19,7 +19,9 @@ export async function GET() {
       .select('*')
       .eq('couple_id', session.coupleId)
       .eq('status', 'PENDING')
-      .maybeSingle();
+      .order('created_at', { ascending: false }) // Pega a mais recente
+      .limit(1) // Garante que teremos apenas uma
+      .single(); // .single() é seguro de usar com .limit(1)
 
     if (error) {
       console.error('[API settlement-requests] Erro na query do Supabase:', error);
