@@ -29,7 +29,7 @@ export async function GET() {
     // Call the PostgreSQL function via RPC
     const { data, error } = await supabase.rpc('get_budgets_progress', {
       p_couple_id: session.coupleId,
-      p_month_year: currentMonthYear,
+      p_month_date: currentMonthYear,
     });
 
     if (error) {

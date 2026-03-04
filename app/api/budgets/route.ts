@@ -12,7 +12,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data: budgets, error } = await supabase
     .from('budgets')
-    .select('id, amount, category_id, custom_categories(name)')
+    .select('id, limit_amount, category_id, custom_categories(name)')
     .eq('couple_id', session.coupleId);
 
   if (error) {
