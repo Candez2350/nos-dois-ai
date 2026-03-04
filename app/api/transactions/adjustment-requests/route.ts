@@ -22,7 +22,7 @@ export async function GET() {
       new_date,
       status,
       created_at,
-      transactions (id, couple_id, amount, description, category, expense_date)
+      transactions (id, couple_id, amount, description, expense_date, custom_categories(name))
     `)
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
@@ -37,18 +37,19 @@ export async function GET() {
       r.transactions?.couple_id === session.coupleId && r.requested_by !== session.userId
   );
   
-  const formatted = list.map((r: any) => ({
-    id: r.id,
-    transaction_id: r.transaction_id,
-    requested_by: r.requested_by,
-    new_amount: r.new_amount,
-    new_description: r.new_description,
-    new_category: r.new_category,
-    new_date: r.new_date,
-    status: r.status,
-    created_at: r.created_at,
-    transaction: r.transactions,
-  }));
+  const formatted = list.map((r: any) => {
+    const { transactions, ...rest } = r;
+    return {
+      ...rest,
+      transaction: {
+        id: transactions.id,
+        amount: transactions.amount,
+        description: transactions.description,
+        expense_date: transactions.expense_date,
+        category: (transactions.custom_categories as { name: string } | null)?.name || 'Sem categoria'
+      }
+    };
+  });
 
   return NextResponse.json({ requests: formatted });
 }

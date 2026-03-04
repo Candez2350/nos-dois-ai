@@ -4,7 +4,7 @@ CREATE OR REPLACE FUNCTION public.get_budgets_progress(p_couple_id UUID, p_month
 RETURNS TABLE(
   category_id UUID,
   category_name TEXT,
-  limit_amount NUMERIC,
+  monthly_limit NUMERIC,
   total_spent NUMERIC
 ) AS $$
 BEGIN
@@ -14,7 +14,7 @@ BEGIN
     SELECT
         b.category_id,
         c.name AS category_name,
-        b.limit_amount,
+        b.monthly_limit,
         COALESCE(spent.total, 0) AS total_spent
     FROM 
         public.budgets b

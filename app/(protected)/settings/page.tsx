@@ -183,12 +183,36 @@ export default function SettingsPage() {
         <section className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#25D366]"><path d="M18 6.2c-1.5-1.5-3.5-2.2-5.5-2.2-4.9 0-9 4.1-9 9s4.1 9 9 9c2 0 4-0.7 5.5-2.2"/><path d="M15 6.8c0 1.1.9 2 2 2s2-.9 2-2-.9-2-2-2-2 .9-2 2z"/><path d="M9.5 14.5c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2z"/></svg>
-            <h2 className="font-bold text-gray-800">Automações</h2>
+            <h2 className="font-bold text-gray-800">Automações e Ajustes</h2>
           </div>
           <Link href="/settings/recurring" className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors">
             <div>
               <p className="font-semibold text-gray-800">Despesas Recorrentes</p>
               <p className="text-sm text-gray-500">Gerencie assinaturas e contas fixas (ex: aluguel, Netflix).</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="m9 18 6-6-6-6"/></svg>
+          </Link>
+          <div className="border-t border-gray-100 -mx-6 my-2"></div>
+          <Link href="/settings/categories" className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors">
+            <div>
+              <p className="font-semibold text-gray-800">Minhas Categorias</p>
+              <p className="text-sm text-gray-500">Crie e gerencie suas próprias categorias de gastos.</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="m9 18 6-6-6-6"/></svg>
+          </Link>
+          <div className="border-t border-gray-100 -mx-6 my-2"></div>
+          <Link href="/settings/balance" className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors">
+            <div>
+              <p className="font-semibold text-gray-800">Ajuste Manual de Saldo</p>
+              <p className="text-sm text-gray-500">Corrija o saldo devedor de um dos parceiros.</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="m9 18 6-6-6-6"/></svg>
+          </Link>
+          <div className="border-t border-gray-100 -mx-6 my-2"></div>
+          <Link href="/settings/budgets" className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 hover:bg-gray-100 transition-colors">
+            <div>
+              <p className="font-semibold text-gray-800">Orçamentos</p>
+              <p className="text-sm text-gray-500">Defina limites de gastos mensais por categoria.</p>
             </div>
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="m9 18 6-6-6-6"/></svg>
           </Link>

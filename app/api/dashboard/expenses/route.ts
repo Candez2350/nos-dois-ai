@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     let query = supabase
       .from('transactions')
-      .select('id, amount, description, category, expense_date, payer_user_id, payer_wa_number, created_at')
+      .select('id, amount, description, expense_date, payer_user_id, payer_wa_number, created_at, custom_categories(name)')
       .eq('couple_id', session.coupleId)
       .order('expense_date', { ascending: false })
       .order('created_at', { ascending: false })
@@ -47,7 +47,8 @@ export async function GET(req: NextRequest) {
       id: t.id,
       amount: Number(t.amount),
       description: t.description,
-      category: t.category,
+      // Use the joined category name
+      category: (t.custom_categories as { name: string } | null)?.name || 'Sem categoria',
       expense_date: t.expense_date,
       payer: payerName(t),
       payer_user_id: t.payer_user_id,
