@@ -4,15 +4,15 @@ import { useState, useEffect, FormEvent } from 'react';
 import { Loader2, Plus, Trash2, X, Target } from 'lucide-react';
 
 interface Category {
-  id: string; // Can be from default or custom categories
+  id: string;
   name: string;
 }
 
 interface Budget {
-  id: number;
-  category: string;
-  limit_amount: number;
-  month_year: string;
+  id: string;
+  category_id: string;
+  category_name: string;
+  monthly_limit: number;
 }
 
 // Helper to get current month in YYYY-MM format
@@ -52,10 +52,10 @@ export default function BudgetManager() {
 
         setBudgets(budgetsData.budgets || []);
         
-        const combined = [...defaultCategories, ...(customCategoriesData.categories || []).map((c: any) => ({...c, id: c.name}))];
-        setAllCategories(combined);
-        if (combined.length > 0) {
-            setSelectedCategory(combined[0].name);
+        const categories = customCategoriesData.categories || [];
+        setAllCategories(categories);
+        if (categories.length > 0) {
+            setSelectedCategory(categories[0].id);
         }
 
       } catch (err: any) {
@@ -97,8 +97,15 @@ export default function BudgetManager() {
         throw new Error(resError || 'Falha ao adicionar orçamento.');
       }
 
-      const newBudget = await res.json();
-      setBudgets([...budgets, newBudget.budget]);
+      const { budget: savedBudget } = await res.json();
+      
+      // Encontra o nome da categoria para exibir na lista imediatamente
+      const categoryName = allCategories.find(c => c.id === selectedCategory)?.name || 'Nova Categoria';
+      
+      // Adiciona à lista local com os campos necessários para exibição
+      const budgetForDisplay: Budget = { ...savedBudget, category_name: categoryName };
+      
+      setBudgets([...budgets, budgetForDisplay]);
       setAmount('');
 
     } catch (err: any) {
@@ -108,7 +115,7 @@ export default function BudgetManager() {
     }
   }
 
-  async function handleDeleteBudget(id: number) {
+  async function handleDeleteBudget(id: string) {
     const originalBudgets = [...budgets];
     setBudgets(budgets.filter(b => b.id !== id));
     setError(null);
@@ -153,7 +160,7 @@ export default function BudgetManager() {
             disabled={isAdding}
           >
             {allCategories.map(cat => (
-              <option key={cat.id} value={cat.name}>{cat.name}</option>
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
             ))}
           </select>
         </div>
@@ -192,15 +199,15 @@ export default function BudgetManager() {
               key={budget.id}
               className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
             >
-              <span className="font-semibold text-gray-800">{budget.category}</span>
+              <span className="font-semibold text-gray-800">{budget.category_name}</span>
               <div className="flex items-center gap-4">
                 <span className="font-mono text-gray-700">
-                  R$ {Number(budget.limit_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {Number(budget.monthly_limit).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </span>
                 <button
                   onClick={() => handleDeleteBudget(budget.id)}
                   className="text-red-400 hover:text-red-600 p-1 rounded-md transition-colors"
-                  aria-label={`Deletar orçamento para ${budget.category}`}
+                  aria-label={`Deletar orçamento para ${budget.category_name}`}
                 >
                   <Trash2 className="w-5 h-5" />
                 </button>
