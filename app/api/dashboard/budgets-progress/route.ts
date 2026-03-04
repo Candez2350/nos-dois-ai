@@ -24,7 +24,7 @@ export async function GET() {
 
   try {
     const supabase = getSupabaseAdmin();
-    const currentMonthYear = new Date().toISOString().slice(0, 7); // Format: YYYY-MM
+    const currentMonthYear = new Date().toISOString().slice(0, 7) + '-01'; // Format: YYYY-MM-DD (Postgres requires full date)
 
     // Call the PostgreSQL function via RPC
     const { data, error } = await supabase.rpc('get_budgets_progress', {

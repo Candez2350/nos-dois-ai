@@ -30,11 +30,12 @@ CREATE TABLE public.ai_preferences (
 CREATE TABLE public.budgets (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   couple_id uuid NOT NULL,
-  category text NOT NULL,
   monthly_limit numeric NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
+  category_id uuid NOT NULL,
   CONSTRAINT budgets_pkey PRIMARY KEY (id),
-  CONSTRAINT budgets_couple_id_fkey FOREIGN KEY (couple_id) REFERENCES public.couples(id)
+  CONSTRAINT budgets_couple_id_fkey FOREIGN KEY (couple_id) REFERENCES public.couples(id),
+  CONSTRAINT budgets_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.custom_categories(id)
 );
 CREATE TABLE public.chat_messages (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -92,14 +93,15 @@ CREATE TABLE public.recurring_expenses (
   couple_id uuid NOT NULL,
   description text NOT NULL,
   amount numeric NOT NULL,
-  category text NOT NULL,
   day_of_month integer NOT NULL CHECK (day_of_month >= 1 AND day_of_month <= 31),
   active boolean DEFAULT true,
   payer_user_id uuid,
   created_at timestamp with time zone DEFAULT now(),
+  category_id uuid NOT NULL,
   CONSTRAINT recurring_expenses_pkey PRIMARY KEY (id),
   CONSTRAINT recurring_expenses_couple_id_fkey FOREIGN KEY (couple_id) REFERENCES public.couples(id),
-  CONSTRAINT recurring_expenses_payer_user_id_fkey FOREIGN KEY (payer_user_id) REFERENCES public.users(id)
+  CONSTRAINT recurring_expenses_payer_user_id_fkey FOREIGN KEY (payer_user_id) REFERENCES public.users(id),
+  CONSTRAINT recurring_expenses_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.custom_categories(id)
 );
 CREATE TABLE public.settlements (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -111,10 +113,15 @@ CREATE TABLE public.settlements (
   created_at timestamp with time zone DEFAULT now(),
   total_expenses numeric DEFAULT 0,
   snapshot_data jsonb,
+  status text DEFAULT 'PENDING'::text CHECK (status = ANY (ARRAY['PENDING'::text, 'COMPLETED'::text, 'REJECTED'::text])),
+  start_date date,
+  end_date date,
+  requested_by uuid,
   CONSTRAINT settlements_pkey PRIMARY KEY (id),
   CONSTRAINT settlements_couple_id_fkey FOREIGN KEY (couple_id) REFERENCES public.couples(id),
   CONSTRAINT settlements_paid_by_fkey FOREIGN KEY (paid_by) REFERENCES public.users(id),
-  CONSTRAINT settlements_received_by_fkey FOREIGN KEY (received_by) REFERENCES public.users(id)
+  CONSTRAINT settlements_received_by_fkey FOREIGN KEY (received_by) REFERENCES public.users(id),
+  CONSTRAINT settlements_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.users(id)
 );
 CREATE TABLE public.subscriptions (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -132,17 +139,20 @@ CREATE TABLE public.transactions (
   payer_wa_number text,
   amount numeric NOT NULL,
   description text,
-  category text,
   image_path text,
   ai_metadata jsonb,
   created_at timestamp with time zone DEFAULT now(),
   settlement_id uuid,
   expense_date date DEFAULT CURRENT_DATE,
   payer_user_id uuid,
+  category_id uuid,
+  recurring_expense_id uuid,
   CONSTRAINT transactions_pkey PRIMARY KEY (id),
   CONSTRAINT transactions_couple_id_fkey FOREIGN KEY (couple_id) REFERENCES public.couples(id),
+  CONSTRAINT transactions_payer_user_id_fkey FOREIGN KEY (payer_user_id) REFERENCES public.users(id),
   CONSTRAINT transactions_settlement_id_fkey FOREIGN KEY (settlement_id) REFERENCES public.settlements(id),
-  CONSTRAINT transactions_payer_user_id_fkey FOREIGN KEY (payer_user_id) REFERENCES public.users(id)
+  CONSTRAINT transactions_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.custom_categories(id),
+  CONSTRAINT transactions_recurring_expense_id_fkey FOREIGN KEY (recurring_expense_id) REFERENCES public.recurring_expenses(id)
 );
 CREATE TABLE public.users (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

@@ -12,7 +12,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data: budgets, error } = await supabase
     .from('budgets')
-    .select('id, limit_amount, category_id, custom_categories(name)')
+    .select('id, monthly_limit, category_id, custom_categories(name)')
     .eq('couple_id', session.coupleId);
 
   if (error) {
@@ -54,11 +54,11 @@ export async function POST(req: NextRequest) {
       .from('budgets')
       .insert({
         couple_id: session.coupleId,
-        category: category.trim(),
-        limit_amount,
-        month_year,
+        category_id: category, // O front deve enviar o ID da categoria
+        monthly_limit: limit_amount,
+        // month_year removido pois não consta no schema.md da tabela budgets
       })
-      .select('id, category, limit_amount, month_year, created_at')
+      .select('id, category_id, monthly_limit, created_at')
       .single();
 
     if (error) {
