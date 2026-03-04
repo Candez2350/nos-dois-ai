@@ -12,17 +12,22 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data: budgets, error } = await supabase
     .from('budgets')
-    .select('id, category, limit_amount, month_year, created_at')
-    .eq('couple_id', session.coupleId)
-    .order('month_year', { ascending: false })
-    .order('category');
+    .select('id, amount, category_id, custom_categories(name)')
+    .eq('couple_id', session.coupleId);
 
   if (error) {
     console.error('Erro ao buscar orçamentos:', error);
+    // O erro original 42703 acontecia aqui
     return NextResponse.json({ error: 'Erro ao carregar orçamentos' }, { status: 500 });
   }
 
-  return NextResponse.json({ budgets: budgets || [] });
+  // Opcional: formatar para facilitar o uso no front
+  const formattedBudgets = budgets?.map(b => ({
+    ...b,
+    category_name: (b.custom_categories as any)?.name || 'Sem categoria'
+  }));
+
+  return NextResponse.json({ budgets: formattedBudgets || [] });
 }
 
 // POST /api/budgets
