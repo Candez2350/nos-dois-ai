@@ -1,3 +1,8 @@
+self.addEventListener('fetch', function(event) {
+  // Simple network-first strategy
+  event.respondWith(fetch(event.request));
+});
+
 self.addEventListener('push', function(event) {
   const data = event.data.json();
   const options = {

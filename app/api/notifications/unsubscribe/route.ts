@@ -1,10 +1,16 @@
+import { createRouteHandlerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session?.userId) {
+  const cookieStore = cookies();
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -12,13 +18,12 @@ export async function POST(req: NextRequest) {
   if (!endpoint) {
     return NextResponse.json({ error: 'Missing endpoint' }, { status: 400 });
   }
-
-  const supabase = getSupabaseAdmin();
-  // The subscription object is complex, so we query the endpoint within the JSONB field.
+  
+  // By using the user-scoped client, the RLS policy for DELETE is automatically applied.
+  // We still need to specify the endpoint to delete the correct subscription for that user.
   const { error } = await supabase
     .from('push_subscriptions')
     .delete()
-    .eq('user_id', session.userId)
     .eq('subscription->>endpoint', endpoint);
 
   if (error) {
