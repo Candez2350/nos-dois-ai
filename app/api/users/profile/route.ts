@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
-import { createAdminClient } from '@/lib/supabase-admin';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = createAdminClient();
+  const supabase = getSupabaseAdmin();
   const { data: user, error } = await supabase
     .from('users')
     .select('id, name, email, pix_key, role, created_at')
@@ -38,7 +38,7 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: 'Name and PIX key are required' }, { status: 400 });
     }
 
-    const supabase = createAdminClient();
+    const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from('users')
       .update({ name, pix_key })

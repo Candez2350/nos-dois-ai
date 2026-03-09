@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase-admin';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
 import { sendNotification } from '@/lib/notification-service';
 
@@ -17,7 +17,7 @@ export async function POST(
   try {
     const { amount, description, category, expense_date } = await req.json();
 
-    const supabase = createAdminClient();
+    const supabase = getSupabaseAdmin();
     const { data: tx, error: txError } = await supabase
       .from('transactions')
       .select('couple_id')

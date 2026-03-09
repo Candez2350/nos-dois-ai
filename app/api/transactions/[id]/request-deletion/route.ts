@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminClient } from '@/lib/supabase-admin';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
 import { sendNotification } from '@/lib/notification-service';
 
@@ -15,7 +15,7 @@ export async function POST(
   const { id: transactionId } = params;
   if (!transactionId) return NextResponse.json({ error: 'ID inválido.' }, { status: 400 });
 
-  const supabase = createAdminClient();
+  const supabase = getSupabaseAdmin();
 
   const { data: tx, error: txErr } = await supabase
     .from('transactions')

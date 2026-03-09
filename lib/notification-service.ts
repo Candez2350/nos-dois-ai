@@ -1,5 +1,5 @@
 import webpush from 'web-push';
-import { createAdminClient } from './supabase-admin';
+import { getSupabaseAdmin } from './supabase-admin';
 
 if (
   !process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
@@ -28,7 +28,7 @@ export async function sendNotification(userId: string, payload: NotificationPayl
     return;
   }
   
-  const supabase = createAdminClient();
+  const supabase = getSupabaseAdmin();
 
   const { data: subscriptions, error } = await supabase
     .from('push_subscriptions')

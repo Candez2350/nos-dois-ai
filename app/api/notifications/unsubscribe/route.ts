@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
-import { createAdminClient } from '@/lib/supabase-admin';
+import { getSupabaseAdmin } from '@/lib/supabase-admin';
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing endpoint' }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
+  const supabase = getSupabaseAdmin();
   // The subscription object is complex, so we query the endpoint within the JSONB field.
   const { error } = await supabase
     .from('push_subscriptions')
