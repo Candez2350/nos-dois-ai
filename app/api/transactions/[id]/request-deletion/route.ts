@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
+import { sendDeletionRequestEmail } from '@/lib/email-service';
 
 export async function POST(
   _req: NextRequest,
@@ -18,7 +19,7 @@ export async function POST(
 
   const { data: tx, error: txErr } = await supabase
     .from('transactions')
-    .select('id, couple_id')
+    .select('id, couple_id, description')
     .eq('id', transactionId)
     .eq('couple_id', session.coupleId)
     .single();
@@ -51,6 +52,22 @@ export async function POST(
   if (insertErr) {
     console.error('Erro ao criar solicitação:', insertErr);
     return NextResponse.json({ error: 'Erro ao solicitar exclusão.' }, { status: 500 });
+  }
+
+  // Send email notification
+  const { data: partner } = await supabase
+    .from('users')
+    .select('email')
+    .eq('couple_id', session.coupleId)
+    .neq('id', session.userId)
+    .single();
+
+  if (partner?.email) {
+    await sendDeletionRequestEmail(
+      partner.email,
+      session.partnerName,
+      tx.description
+    );
   }
 
   return NextResponse.json({ success: true, message: 'Solicitação enviada. Aguarde o parceiro aprovar.' });

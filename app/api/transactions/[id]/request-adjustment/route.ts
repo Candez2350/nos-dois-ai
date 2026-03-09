@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
+import { sendAdjustmentRequestEmail } from '@/lib/email-service';
 
 export async function POST(
   req: NextRequest,
@@ -40,6 +41,23 @@ export async function POST(
       });
 
     if (insertError) throw insertError;
+
+    // Send email notification
+    const { data: partner } = await supabase
+      .from('users')
+      .select('email')
+      .eq('couple_id', session.coupleId)
+      .neq('id', session.userId)
+      .single();
+
+    if (partner?.email) {
+      await sendAdjustmentRequestEmail(
+        partner.email,
+        session.partnerName,
+        description,
+        amount
+      );
+    }
 
     return NextResponse.json({ success: true, message: 'Solicitação de ajuste enviada.' });
   } catch (error: any) {
