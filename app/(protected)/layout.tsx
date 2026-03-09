@@ -8,8 +8,20 @@ import {
   History, 
   Settings, 
   LogOut,
-  User
+  User,
+  Download
 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+
+// Define the custom event type
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: Array<string>;
+  readonly userChoice: Promise<{
+    outcome: 'accepted' | 'dismissed',
+    platform: string
+  }>;
+  prompt(): Promise<void>;
+}
 
 export default function AppLayout({
   children,
@@ -18,6 +30,34 @@ export default function AppLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPromptEvent(e as BeforeInstallpromptEvent);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = () => {
+    if (installPromptEvent) {
+      installPromptEvent.prompt();
+      installPromptEvent.userChoice.then(choiceResult => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+        } else {
+          console.log('User dismissed the install prompt');
+        }
+        setInstallPromptEvent(null);
+      });
+    }
+  };
 
   const menuItems = [
     { icon: MessageCircle, label: 'Chat', href: '/chat' },
@@ -28,7 +68,7 @@ export default function AppLayout({
   ];
 
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch('/api/auth/logout');
     router.push('/login');
   }
 
@@ -61,6 +101,15 @@ export default function AppLayout({
               </Link>
             );
           })}
+           {installPromptEvent && (
+            <button
+              onClick={handleInstallClick}
+              className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium transition-colors text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-gray-800 dark:hover:text-gray-100"
+            >
+              <Download className="w-5 h-5" />
+              Instalar App
+            </button>
+          )}
         </nav>
 
         <div className="p-4 border-t border-gray-100 dark:border-gray-800">
@@ -82,14 +131,14 @@ export default function AppLayout({
       </main>
 
       {/* --- BOTTOM NAVIGATION (Mobile) --- */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 px-6 py-3 z-50 flex justify-between items-center safe-area-bottom">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-950 border-t border-gray-200 dark:border-gray-800 px-2 py-3 z-50 flex justify-around items-start text-center">
         {menuItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center gap-1 ${
+              className={`flex flex-col items-center gap-1 w-1/5 ${
                 isActive ? 'text-[#25D366]' : 'text-gray-400 dark:text-gray-500'
               }`}
             >
@@ -98,10 +147,21 @@ export default function AppLayout({
               }`}>
                 <item.icon className="w-6 h-6" />
               </div>
-              <span className="text-[10px] font-medium">{item.label}</span>
+              <span className="text-[10px] font-medium leading-tight">{item.label}</span>
             </Link>
           );
         })}
+        {installPromptEvent && (
+          <button
+            onClick={handleInstallClick}
+            className="flex flex-col items-center gap-1 w-1/5 text-gray-400 dark:text-gray-500"
+          >
+            <div className="p-2 rounded-xl bg-transparent">
+              <Download className="w-6 h-6" />
+            </div>
+            <span className="text-[10px] font-medium leading-tight">Instalar</span>
+          </button>
+        )}
       </nav>
     </div>
   );

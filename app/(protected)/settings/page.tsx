@@ -1,8 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, Save, Users, Percent, Lock, LogOut } from 'lucide-react';
+import { useTheme } from 'next-themes';
+import { Loader2, Save, Users, Percent, Lock, LogOut, Bell, Sun, Moon, Laptop } from 'lucide-react';
 import Link from 'next/link';
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -14,6 +26,79 @@ export default function SettingsPage() {
     split_percentage_partner_1: 50,
     split_percentage_partner_2: 50,
   });
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [isSubscribing, setIsSubscribing] = useState(false);
+  const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    async function checkSubscription() {
+      if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        setIsSubscribed(!!subscription);
+      }
+    }
+    checkSubscription();
+  }, []);
+
+  async function handleSubscribe() {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      alert('Seu navegador não suporta notificações.');
+      return;
+    }
+
+    setIsSubscribing(true);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const existingSubscription = await registration.pushManager.getSubscription();
+
+      if (existingSubscription) {
+        // Unsubscribe
+        await existingSubscription.unsubscribe();
+        await fetch('/api/notifications/unsubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: existingSubscription.endpoint }),
+        });
+        setIsSubscribed(false);
+        alert('Notificações desativadas.');
+      } else {
+        // Subscribe
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          alert('Permissão para notificações não concedida.');
+          return;
+        }
+
+        const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        if (!vapidPublicKey) {
+          console.error('VAPID public key não encontrada.');
+          alert('Erro na configuração do servidor de notificações.');
+          return;
+        }
+
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        });
+
+        await fetch('/api/notifications/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(subscription),
+        });
+        
+        setIsSubscribed(true);
+        alert('Notificações ativadas com sucesso!');
+      }
+    } catch (error) {
+      console.error('Erro ao (des)inscrever notificações:', error);
+      alert('Ocorreu um erro. Tente novamente.');
+    } finally {
+      setIsSubscribing(false);
+    }
+  }
+
 
   useEffect(() => {
     async function fetchData() {
@@ -76,7 +161,7 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 pb-12">
-      <h1 className="text-2xl font-bold text-[#1C1C1C] mb-6">Configurações do Casal</h1>
+      <h1 className="text-2xl font-bold text-[#1C1C1C] mb-6">Configurações</h1>
 
       {!isP1 && (
         <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl mb-6 flex items-start gap-3">
@@ -102,6 +187,42 @@ export default function SettingsPage() {
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="w-full p-3 rounded-xl border border-gray-200 focus:border-[#25D366] outline-none disabled:bg-gray-50 disabled:text-gray-500"
             />
+          </div>
+        </section>
+        
+        <section className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Sun className="w-5 h-5 text-[#25D366]" />
+            <h2 className="font-bold text-gray-800">Aparência</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <button
+              onClick={() => setTheme('light')}
+              className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all ${
+                theme === 'light' ? 'border-[#25D366] bg-[#25D366]/5' : 'border-gray-100 hover:border-gray-200'
+              }`}
+            >
+              <Sun className="w-6 h-6" />
+              <span className="text-sm font-medium">Claro</span>
+            </button>
+            <button
+              onClick={() => setTheme('dark')}
+              className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all ${
+                theme === 'dark' ? 'border-[#25D366] bg-[#25D366]/5' : 'border-gray-100 hover:border-gray-200'
+              }`}
+            >
+              <Moon className="w-6 h-6" />
+              <span className="text-sm font-medium">Escuro</span>
+            </button>
+            <button
+              onClick={() => setTheme('system')}
+              className={`flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all ${
+                theme === 'system' ? 'border-[#25D366] bg-[#25D366]/5' : 'border-gray-100 hover:border-gray-200'
+              }`}
+            >
+              <Laptop className="w-6 h-6" />
+              <span className="text-sm font-medium">Sistema</span>
+            </button>
           </div>
         </section>
 
@@ -177,6 +298,31 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+          </div>
+        </section>
+
+        <section className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Bell className="w-5 h-5 text-[#25D366]" />
+            <h2 className="font-bold text-gray-800">Notificações</h2>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-gray-50">
+            <div>
+              <p className="font-semibold text-gray-800">Avisos de Pendências</p>
+              <p className="text-sm text-gray-500">Receba um alerta quando houver uma ação pendente.</p>
+            </div>
+            <button
+              onClick={handleSubscribe}
+              disabled={isSubscribing}
+              className={`px-4 py-2 rounded-lg font-bold text-sm transition-colors flex items-center gap-2 ${
+                isSubscribed
+                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                  : 'bg-[#25D366]/20 text-[#006424] hover:bg-[#25D366]/30'
+              }`}
+            >
+              {isSubscribing && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isSubscribed ? 'Desativar' : 'Ativar'}
+            </button>
           </div>
         </section>
 

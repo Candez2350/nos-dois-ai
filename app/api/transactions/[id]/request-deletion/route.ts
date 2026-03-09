@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabase-admin';
+import { createAdminClient } from '@/lib/supabase-admin';
 import { getSession } from '@/lib/session';
-import { sendDeletionRequestEmail } from '@/lib/email-service';
+import { sendNotification } from '@/lib/notification-service';
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   const session = await getSession();
   if (!session?.userId) {
     return NextResponse.json({ error: 'Não autorizado.' }, { status: 401 });
   }
 
-  const { id: transactionId } = await params;
+  const { id: transactionId } = params;
   if (!transactionId) return NextResponse.json({ error: 'ID inválido.' }, { status: 400 });
 
-  const supabase = getSupabaseAdmin();
+  const supabase = createAdminClient();
 
   const { data: tx, error: txErr } = await supabase
     .from('transactions')
@@ -54,20 +54,19 @@ export async function POST(
     return NextResponse.json({ error: 'Erro ao solicitar exclusão.' }, { status: 500 });
   }
 
-  // Send email notification
+  // --- Notification Logic ---
   const { data: partner } = await supabase
     .from('users')
-    .select('email')
+    .select('id') // Select partner's user ID for push notification
     .eq('couple_id', session.coupleId)
     .neq('id', session.userId)
     .single();
 
-  if (partner?.email) {
-    await sendDeletionRequestEmail(
-      partner.email,
-      session.partnerName,
-      tx.description
-    );
+  if (partner?.id) {
+    await sendNotification(partner.id, {
+        title: 'Solicitação de Exclusão',
+        body: `${session.partnerName} pediu para excluir uma despesa.`,
+    });
   }
 
   return NextResponse.json({ success: true, message: 'Solicitação enviada. Aguarde o parceiro aprovar.' });
